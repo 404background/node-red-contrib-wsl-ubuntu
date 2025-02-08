@@ -4,7 +4,11 @@
         color: '#dd4814',
         defaults: {
             name: { value: "" },
-            distro: { value: "Ubuntu-20.04", required: true }
+            distro: { value: "Ubuntu-20.04", required: true },
+            continuous: { value: false }
+        },
+        credentials: {
+            sudoPassword: { type: "password" }
         },
         inputs: 1,
         outputs: 1,
@@ -22,8 +26,11 @@
                 const selected = distro === currentValue ? "selected" : "";
                 distroSelect.append(`<option value="${distro}" ${selected}>${distro}</option>`);
             });
+
+            $("#node-input-continuous").prop("checked", this.continuous);
         },
         oneditsave: function () {
+            const passwordField = $("#node-input-sudoPassword");
             this.distro = $("#node-input-distro").val();
         }
     });
@@ -38,5 +45,19 @@
     <div class="form-row">
         <label for="node-input-distro"><i class="fa fa-linux"></i> Version</label>
         <select id="node-input-distro"></select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-sudoPassword"><i class="fa fa-lock"></i> Sudo Pass</label>
+        <input type="password" id="node-input-sudoPassword">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-continuous"><i class="fa fa-refresh"></i> Continuous</label>
+        <input
+        type="checkbox"
+        id="node-input-continuous"
+        style="display: inline-block; width: auto; vertical-align: top;"
+        />
     </div>
 </script>

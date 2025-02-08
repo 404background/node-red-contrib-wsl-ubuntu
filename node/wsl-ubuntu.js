@@ -6,6 +6,9 @@ module.exports = function (RED) {
         const node = this;
 
         const distro = config.distro || "Ubuntu-20.04";
+        const continuous = config.continuous || false;
+        const sudoPassword = this.credentials.sudoPassword || "";
+
         node.status({ fill: "green", shape: "dot", text: "Standby" });
 
         node.on("input", function (msg) {
@@ -14,30 +17,47 @@ module.exports = function (RED) {
                 return;
             }
 
-            const command = msg.payload || "cat /etc/os-release";
-            node.status({ fill: "blue", shape: "dot", text: "Running" });
+            let command = msg.payload;
+            if (!command) {
+                node.error("No command provided", msg);
+                return;
+            }
 
-            const child = spawn("wsl", ["-d", distro, "-e", ...command.split(" ")]);
+            if (command.startsWith("sudo") && sudoPassword) {
+                command = `echo ${sudoPassword} | sudo -S ${command.slice(5)}`;
+            }
 
             let outputBuffer = "";
+            const child = spawn(`wsl -d ${distro} --cd ~ -e bash -c "${command}"`, {
+                shell: true,
+            });
+            node.status({ fill: "blue", shape: "dot", text: "Running" });
 
             child.stdout.on("data", (data) => {
-                outputBuffer += data.toString();
+                if (continuous) {
+                    node.send({ payload: data.toString() });
+                } else {
+                    outputBuffer += data.toString();
+                }
             });
 
             child.stderr.on("data", (data) => {
-                outputBuffer += data.toString();
+                const message = data.toString();
+                if (!message.startsWith("[sudo]")) {
+                    node.error(`Error: ${message}`, msg);
+                }
             });
-
-            child.on("close", () => {
-                msg.payload = outputBuffer.trim();
-                node.send(msg);
-                node.status({ fill: "green", shape: "dot", text: "Standby" });
-            });
-
+            
             child.on("error", (err) => {
                 node.error("Failed to start process: " + err.message, msg);
                 node.status({ fill: "red", shape: "dot", text: "Error" });
+            });
+
+            child.on("close", () => {
+                if (!continuous) {
+                    node.send({ payload: outputBuffer });
+                }
+                node.status({ fill: "green", shape: "dot", text: "Standby" });
             });
         });
 
@@ -46,5 +66,9 @@ module.exports = function (RED) {
         });
     }
 
-    RED.nodes.registerType("wsl-ubuntu", WslUbuntuNode);
+    RED.nodes.registerType("wsl-ubuntu", WslUbuntuNode, {
+        credentials: {
+            sudoPassword: {type: "password"}
+        }
+    });
 };
