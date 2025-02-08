@@ -1,0 +1,33 @@
+{
+  "name": "@background404/node-red-contrib-wsl-ubuntu",
+  "version": "0.0.1",
+  "description": "Node for using Ubuntu environment in WSL with Node-RED",
+  "main": "node/wsl.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "node-red": {
+    "version": ">=1.3.7",
+    "nodes": {
+      "wsl-ubuntu": "node/wsl-ubuntu.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/404background/node-red-contrib-wsl-ubuntu.git"
+  },
+  "keywords": [
+    "node-red",
+    "wsl",
+    "ubuntu"
+  ],
+  "author": "background404",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/404background/node-red-contrib-wsl-ubuntu/issues"
+  },
+  "homepage": "https://github.com/404background/node-red-contrib-wsl-ubuntu#readme"
+}

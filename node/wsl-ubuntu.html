@@ -1,0 +1,42 @@
+<script type="text/javascript">
+    RED.nodes.registerType('wsl-ubuntu', {
+        category: 'function',
+        color: '#dd4814',
+        defaults: {
+            name: { value: "" },
+            distro: { value: "Ubuntu-20.04", required: true }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "cog.svg",
+        label: function () {
+            return this.name || "wsl-ubuntu";
+        },
+        oneditprepare: function () {
+            const distroSelect = $("#node-input-distro");
+            const currentValue = this.distro || "Ubuntu-20.04";
+
+            distroSelect.empty();
+            const versions = ["Ubuntu-18.04", "Ubuntu-20.04", "Ubuntu-22.04", "Ubuntu-24.04"];
+            versions.forEach(distro => {
+                const selected = distro === currentValue ? "selected" : "";
+                distroSelect.append(`<option value="${distro}" ${selected}>${distro}</option>`);
+            });
+        },
+        oneditsave: function () {
+            this.distro = $("#node-input-distro").val();
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="wsl-ubuntu">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Node name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-distro"><i class="fa fa-linux"></i> Version</label>
+        <select id="node-input-distro"></select>
+    </div>
+</script>
