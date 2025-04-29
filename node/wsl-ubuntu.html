@@ -5,7 +5,8 @@
         defaults: {
             name: { value: "" },
             distro: { value: "Ubuntu-20.04", required: true },
-            continuous: { value: false }
+            continuous: { value: false },
+            initCmd: { value: "" }
         },
         credentials: {
             sudoPassword: { type: "password" }
@@ -32,6 +33,28 @@
         oneditsave: function () {
             const passwordField = $("#node-input-sudoPassword");
             this.distro = $("#node-input-distro").val();
+        },
+        button: {
+            visible: function() {
+                return this.continuous === true;
+            },
+            toggle: false,
+            icon: "fa-stop",
+            label: function() {
+                return "Stop";
+            },
+            onclick: function() {
+                $.ajax({
+                    url: "wsl-ubuntu/" + this.id + "/kill",
+                    type: "POST",
+                    success: function(resp) {
+                        RED.notify("WSL process terminated", "success");
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        RED.notify("Failed to terminate WSL process: " + errorThrown, "error");
+                    }
+                });
+            }
         }
     });
 </script>
@@ -53,11 +76,38 @@
     </div>
 
     <div class="form-row">
+        <label for="node-input-initCmd"><i class="fa fa-terminal"></i> Pre CMD</label>
+        <input type="text" id="node-input-initCmd" placeholder="Commands to run before msg.payload (e.g. source ~/catkin_ws/devel/setup.bash)">
+        <div class="form-tips">Command to run before executing msg.payload.</div>
+    </div>
+
+    <div class="form-row">
         <label for="node-input-continuous"><i class="fa fa-refresh"></i> Continuous</label>
         <input
         type="checkbox"
         id="node-input-continuous"
         style="display: inline-block; width: auto; vertical-align: top;"
         />
+        <div class="form-tips"><b>Note:</b> Enable this option for long-running processes (e.g. roscore). Output will be sent continuously, and a stop button will appear to terminate the process.</div>
     </div>
+</script>
+
+<script type="text/html" data-help-name="wsl-ubuntu">
+    <p>A node for executing commands in WSL (Windows Subsystem for Linux) Ubuntu environment.</p>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string</span></dt>
+        <dd><strong>Required:</strong> Command to execute in the WSL environment.</dd>
+        <dt class="optional">kill <span class="property-type">boolean</span></dt>
+        <dd>Setting this to true terminates any running process</dd>
+    </dl>
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string</span></dt>
+        <dd>Command execution results</dd>
+    </dl>
+    <h3>Details</h3>
+    <p>When "Continuous" mode is enabled, command output is sent continuously as it becomes available. New commands are rejected while a process is running, and a stop button appears to terminate the process.</p>
+    <p>When "Continuous" mode is disabled, command output is sent as a single message after the command completes execution.</p>
+    <p>The "Pre CMD" field allows you to specify commands that will be executed before the main command (msg.payload). This is useful for setting up environments or sourcing configuration files.</p>
 </script>

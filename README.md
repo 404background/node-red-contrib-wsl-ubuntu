@@ -17,6 +17,19 @@ The node can be set to the following options.
 
 ![edit.png](./image/edit.png)
 
+## Continuous Mode
+
+When "Continuous" mode is enabled, command output is sent continuously as it becomes available. This is especially useful for long-running processes like `roscore` or other server applications.
+
+In this mode:
+- Output is streamed in real-time 
+- A stop button appears in the node allowing you to terminate the process
+- You can also terminate the process by sending a message with `msg.kill=true`
+
+When "Continuous" mode is disabled, command output is sent as a single message after the command completes execution.
+
+## Usage Examples
+
 Different versions are shown for different Ubuntu environments.
 
 ![os.png](./image/os.png)
