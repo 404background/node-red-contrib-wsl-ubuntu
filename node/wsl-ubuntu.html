@@ -4,9 +4,10 @@
         color: '#dd4814',
         defaults: {
             name: { value: "" },
-            distro: { value: "Ubuntu-20.04", required: true },
+            wslconfig: { value: "", type: "wsl-config" },
             continuous: { value: false },
-            initCmd: { value: "" }
+            initCmd: { value: "" },
+            loadProfile: { value: true }
         },
         credentials: {
             sudoPassword: { type: "password" }
@@ -18,21 +19,8 @@
             return this.name || "wsl-ubuntu";
         },
         oneditprepare: function () {
-            const distroSelect = $("#node-input-distro");
-            const currentValue = this.distro || "Ubuntu-20.04";
-
-            distroSelect.empty();
-            const versions = ["Ubuntu-18.04", "Ubuntu-20.04", "Ubuntu-22.04", "Ubuntu-24.04"];
-            versions.forEach(distro => {
-                const selected = distro === currentValue ? "selected" : "";
-                distroSelect.append(`<option value="${distro}" ${selected}>${distro}</option>`);
-            });
-
             $("#node-input-continuous").prop("checked", this.continuous);
-        },
-        oneditsave: function () {
-            const passwordField = $("#node-input-sudoPassword");
-            this.distro = $("#node-input-distro").val();
+            $("#node-input-loadProfile").prop("checked", this.loadProfile !== false);
         },
         button: {
             visible: function() {
@@ -66,13 +54,23 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-distro"><i class="fa fa-linux"></i> Version</label>
-        <select id="node-input-distro"></select>
+        <label for="node-input-wslconfig"><i class="fa fa-linux"></i> WSL Config</label>
+        <input type="text" id="node-input-wslconfig">
     </div>
 
     <div class="form-row">
         <label for="node-input-sudoPassword"><i class="fa fa-lock"></i> Sudo Pass</label>
         <input type="password" id="node-input-sudoPassword">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-loadProfile"><i class="fa fa-file-text-o"></i> Shell Init</label>
+        <input
+        type="checkbox"
+        id="node-input-loadProfile"
+        style="display: inline-block; width: auto; vertical-align: top;"
+        />
+        <div class="form-tips">Run the command in a login <b>interactive</b> shell so <code>~/.bashrc</code> and <code>/etc/profile</code> are loaded, just like opening an Ubuntu terminal. Disable this only if your <code>~/.bashrc</code> misbehaves when run non-interactively.</div>
     </div>
 
     <div class="form-row">
@@ -94,6 +92,11 @@
 
 <script type="text/html" data-help-name="wsl-ubuntu">
     <p>A node for executing commands in WSL (Windows Subsystem for Linux) Ubuntu environment.</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt>WSL Config <span class="property-type">wsl-config</span></dt>
+        <dd>Configuration node that specifies which WSL distribution to use. Supports custom distros created via <code>wsl --import</code>.</dd>
+    </dl>
     <h3>Inputs</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">string</span></dt>
@@ -110,4 +113,5 @@
     <p>When "Continuous" mode is enabled, command output is sent continuously as it becomes available. New commands are rejected while a process is running, and a stop button appears to terminate the process.</p>
     <p>When "Continuous" mode is disabled, command output is sent as a single message after the command completes execution.</p>
     <p>The "Pre CMD" field allows you to specify commands that will be executed before the main command (msg.payload). This is useful for setting up environments or sourcing configuration files.</p>
+    <p>"Shell Init" is enabled by default. The command then runs in a login <b>interactive</b> shell (<code>bash -l -i -c</code>), so <code>/etc/profile</code> and <code>~/.bashrc</code> are sourced exactly as they are when you open an Ubuntu terminal. Ubuntu's <code>~/.bashrc</code> exits early for non-interactive shells, so without this anything appended to it (for example <code>source /opt/ros/humble/setup.bash</code>) would be skipped. The login banner (MOTD) is suppressed so it does not appear in the output.</p>
 </script>

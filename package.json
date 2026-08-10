@@ -1,8 +1,8 @@
 {
   "name": "@background404/node-red-contrib-wsl-ubuntu",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Node for using Ubuntu environment in WSL with Node-RED",
-  "main": "node/wsl.js",
+  "main": "node/wsl-ubuntu.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,7 +12,8 @@
   "node-red": {
     "version": ">=1.3.7",
     "nodes": {
-      "wsl-ubuntu": "node/wsl-ubuntu.js"
+      "wsl-ubuntu": "node/wsl-ubuntu.js",
+      "wsl-config": "node/wsl-config.js"
     }
   },
   "repository": {
