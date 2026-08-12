@@ -223,7 +223,7 @@
         <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
             <i class="fa fa-check"></i>
         </button>
-        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; use an image you obtained yourself, for example an Ubuntu WSL rootfs or a <code>wsl --export</code> of an environment you already have.</div>
+        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; the image has to be one you obtained yourself.</div>
     </div>
 
     <div class="form-row wsl-src-import">
@@ -240,7 +240,7 @@
 </script>
 
 <script type="text/html" data-help-name="wsl-config">
-    <p>Configuration node for selecting and managing WSL (Windows Subsystem for Linux) environments, used to manage multiple Ubuntu environments.</p>
+    <p>Configuration node that selects the WSL (Windows Subsystem for Linux) environment a <code>wsl-ubuntu</code> node runs in, and creates one by importing an image if it does not exist yet. One config node per environment lets several Ubuntu environments be used side by side.</p>
 
     <h3>Source</h3>
     <p>Choose how the environment is obtained:</p>
@@ -248,7 +248,7 @@
         <li><b>Use existing environment</b> &ndash; pick one of the environments already installed on this PC from the dropdown. The list is read with <code>wsl -l -v</code> and can be reloaded with the refresh button. The environment is only used; it is never modified or removed by deploying.</li>
         <li><b>Create new environment (import image file)</b> &ndash; create a new environment from a <code>.tar</code> / <code>.tar.gz</code> image stored on this PC (<code>wsl --import</code>). The name must not be one that already exists; the editor rejects a duplicate name.</li>
     </ul>
-    <p>No image is ever downloaded from the internet. To create a clean environment, obtain an image yourself (for example an Ubuntu WSL rootfs, or a <code>wsl --export</code> of an environment you already have) and point <b>Image file</b> at it.</p>
+    <p>No image is ever downloaded from the internet. Obtain an image yourself and point <b>Image file</b> at it.</p>
 
     <h3>Reusing an environment</h3>
     <p>Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and no import runs. Reinstalling this module, or importing the flow on a PC that already has the environment, therefore picks the existing environment back up rather than recreating it.</p>

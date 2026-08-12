@@ -130,9 +130,9 @@ In this mode:
 
 When "Continuous" mode is disabled, command output is sent as a single message after the command completes execution.
 
-## Configuration Node (Managing Multiple Environments)
+## Configuration Node (Using Multiple Environments)
 
-The **wsl-config** configuration node lets you manage several Ubuntu environments and select which one a `wsl-ubuntu` node runs against.
+The **wsl-config** configuration node selects which Ubuntu environment a `wsl-ubuntu` node runs against.
 
 In the `wsl-ubuntu` node, choose a **WSL Config** to pick the target environment. Each config node represents one environment, so you can keep multiple independent Ubuntu environments (for example one per project) side by side.
 
@@ -143,7 +143,7 @@ When a config node is created, you choose a **Source**:
 - **Use existing environment** – pick one of the environments already installed on this PC from a dropdown. The list is read with `wsl -l -v` and can be reloaded with the refresh button. The environment is only used; deploying never modifies or removes it.
 - **Create new environment (import image file)** – create a new environment from a `.tar` / `.tar.gz` image stored on this PC (`wsl --import <new name> <install location> <file>`).
 
-**No image is ever downloaded from the internet.** To create a clean environment, obtain an image yourself and point **Image file** at its path — for example an Ubuntu WSL rootfs you downloaded, or a `wsl --export` of an environment you already have.
+**No image is ever downloaded from the internet.** Obtain an image yourself and point **Image file** at its path.
 
 ### Creating a new environment
 
@@ -159,16 +159,17 @@ Before importing anything, the configured name is looked up among the installed 
 
 This means that reinstalling this module, or importing the flow on a PC that already holds the environment, picks the existing environment back up instead of recreating it — the data inside it is preserved. The same applies to config nodes saved with the older "import from local image file" or "download" sources.
 
-### Managing an environment
+### Removing an environment
 
-- **Deleting a config node** – deleting a config node leaves the WSL environment untouched. This module never removes an environment: it has no unregister button and no delete-on-deploy option, so removing a config node, re-importing the flow, or reinstalling the module cannot destroy your data.
-- **Removing an environment** – done by you, from a terminal:
+This module never removes a WSL environment. Deleting a config node only drops the reference to it, and there is no unregister button and no delete-on-deploy option, so removing a config node, re-importing the flow, or reinstalling the module cannot destroy your data.
 
-  ```
-  wsl --unregister <name>
-  ```
+Removing an environment is left to you, from a terminal:
 
-  Delete the installation folder afterwards if you want the disk space back.
+```
+wsl --unregister <name>
+```
+
+Delete the installation folder afterwards if you want the disk space back.
 
 ## Usage Examples
 
