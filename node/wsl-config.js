@@ -1,4 +1,4 @@
-const { execFile, exec } = require("child_process");
+const { execFile } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -83,11 +83,6 @@ module.exports = function (RED) {
         node.sourceType = normalizeSourceType(config.sourceType);
         node.sourceFile = config.sourceFile;
         node.installLocation = config.installLocation;
-        // Removing the config node only unregisters the distribution when the
-        // user has explicitly asked for it. Defaulting this to false means that
-        // re-importing a flow, or reinstalling this module, never destroys an
-        // environment that still holds the user's work.
-        node.removeOnDelete = config.removeOnDelete === true;
         node.provisionStatus = "checking";
         node.provisionDetail = "";
 
@@ -108,23 +103,6 @@ module.exports = function (RED) {
             return node.installLocation || path.join(os.homedir(), "wsl", node.distro);
         }
 
-        // Marker written next to an imported distribution, so that "On delete"
-        // can tell an environment this node created from one that was merely
-        // adopted. It has to live on disk rather than in memory: after a
-        // Node-RED restart an imported distribution looks exactly like a
-        // pre-existing one.
-        function importMarkerPath() {
-            return path.join(resolveInstallLocation(), ".node-red-wsl-import");
-        }
-
-        function wasImportedByThisNode() {
-            try {
-                return fs.readFileSync(importMarkerPath(), "utf8").trim() === node.distro;
-            } catch (e) {
-                return false;
-            }
-        }
-
         function importImage(file, installLocation, report) {
             try {
                 fs.mkdirSync(installLocation, { recursive: true });
@@ -135,13 +113,6 @@ module.exports = function (RED) {
             execFile("wsl.exe", ["--import", node.distro, installLocation, file], { encoding: "buffer", windowsHide: true, timeout: 0 }, (error, stdout) => {
                 if (error) {
                     return report("error", decodeWslOutput(stdout) || error.message);
-                }
-                try {
-                    fs.writeFileSync(importMarkerPath(), node.distro);
-                } catch (e) {
-                    // Only "On delete" depends on the marker; a distribution
-                    // that cannot be marked is simply never auto-removed.
-                    node.warn("Could not record import marker: " + e.message);
                 }
                 node.log('Imported WSL distribution "' + node.distro + '" from ' + file);
                 report("ready");
@@ -209,31 +180,16 @@ module.exports = function (RED) {
             });
         }
 
-        node.on("close", function (removed, done) {
+        // This node never removes a WSL environment. Deleting the config node
+        // only drops the reference to it; removing the environment itself is
+        // left to the user, with "wsl --unregister <name>" in a terminal.
+        node.on("close", function (done) {
             const op = inflightProvisions[node.distro];
             if (op) {
                 const idx = op.subscribers.indexOf(handleProvisionEvent);
                 if (idx >= 0) op.subscribers.splice(idx, 1);
             }
-
-            // Only unregister when the user opted in explicitly *and* this node
-            // is the one that imported the distribution. Distributions that were
-            // merely referenced or adopted are left alone, so that deleting or
-            // re-importing a flow cannot destroy an environment that was already
-            // on this PC.
-            if (removed && node.distro && node.sourceType === "import"
-                && node.removeOnDelete && wasImportedByThisNode()) {
-                execFile("wsl.exe", ["--unregister", node.distro], { encoding: "buffer", windowsHide: true, timeout: 60000 }, (error, stdout) => {
-                    if (error) {
-                        RED.log.warn('wsl-config: failed to unregister "' + node.distro + '": ' + (decodeWslOutput(stdout) || error.message));
-                    } else {
-                        RED.log.info('wsl-config: unregistered WSL distribution "' + node.distro + '"');
-                    }
-                    done();
-                });
-            } else {
-                done();
-            }
+            done();
         });
     }
 
@@ -266,30 +222,6 @@ module.exports = function (RED) {
         });
     });
 
-    RED.httpAdmin.get("/wsl-config/distro-path/:name", function (req, res) {
-        const distroName = req.params.name;
-        exec('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss" /s', { windowsHide: true, timeout: 5000 }, (error, stdout) => {
-            if (error) {
-                return res.json({ path: "" });
-            }
-
-            const blocks = stdout.split(/\r?\n\r?\n/);
-            for (const block of blocks) {
-                if (block.includes("DistributionName") && block.includes(distroName)) {
-                    const nameMatch = block.match(/DistributionName\s+REG_SZ\s+(.+)/);
-                    if (nameMatch && nameMatch[1].trim() === distroName) {
-                        const pathMatch = block.match(/BasePath\s+REG_SZ\s+(.+)/);
-                        if (pathMatch) {
-                            return res.json({ path: pathMatch[1].trim() });
-                        }
-                    }
-                }
-            }
-
-            res.json({ path: "" });
-        });
-    });
-
     // Export a distribution to a .tar file: wsl --export <distro> <file>
     RED.httpAdmin.post("/wsl-config/export", function (req, res) {
         const distroName = req.body.distro;
@@ -311,59 +243,6 @@ module.exports = function (RED) {
                 return res.status(500).json({ error: message });
             }
             res.json({ message: decodeWslOutput(stdout) || "Exported successfully" });
-        });
-    });
-
-    RED.httpAdmin.post("/wsl-config/unregister", function (req, res) {
-        const distroName = req.body.distro;
-        if (!distroName) {
-            return res.status(400).json({ error: "Distro name is required" });
-        }
-
-        execFile("wsl.exe", ["--unregister", distroName], { encoding: "buffer", windowsHide: true, timeout: 30000 }, (error, stdout) => {
-            if (error) {
-                const message = decodeWslOutput(stdout) || error.message;
-                return res.status(500).json({ error: message });
-            }
-            res.json({ message: decodeWslOutput(stdout) || "Unregistered successfully" });
-        });
-    });
-
-    RED.httpAdmin.post("/wsl-config/delete-folder", function (req, res) {
-        const folderPath = req.body.path;
-        if (!folderPath) {
-            return res.status(400).json({ error: "Folder path is required" });
-        }
-
-        // Validate the path looks like an absolute Windows path
-        // and does not contain characters that could break the command
-        if (!/^[A-Za-z]:\\/.test(folderPath) || /["<>|&%^]/.test(folderPath)) {
-            return res.status(400).json({ error: "Invalid folder path" });
-        }
-
-        // A drive root or a single top-level folder is never a WSL install
-        // location, and deleting one would take unrelated data with it.
-        const segments = folderPath.replace(/[\\/]+$/, "").split(/[\\/]+/).slice(1).filter(s => s.length > 0);
-        if (segments.length < 2) {
-            return res.status(400).json({ error: "Refusing to delete a drive root or a top-level folder: " + folderPath });
-        }
-
-        let stat;
-        try {
-            stat = fs.statSync(folderPath);
-        } catch (e) {
-            return res.status(400).json({ error: "Folder does not exist: " + folderPath });
-        }
-        if (!stat.isDirectory()) {
-            return res.status(400).json({ error: "Path is not a folder: " + folderPath });
-        }
-
-        const rmCmd = `rmdir /s /q "${folderPath}"`;
-        exec(rmCmd, { windowsHide: true, timeout: 30000 }, (error, stdout, stderr) => {
-            if (error) {
-                return res.status(500).json({ error: stderr || error.message });
-            }
-            res.json({ message: "Folder deleted successfully" });
         });
     });
 };

@@ -162,8 +162,14 @@ This means that reinstalling this module, or importing the flow on a PC that alr
 ### Managing an environment
 
 - **Export** – save the selected environment to a `.tar` image file (`wsl --export <distro> <file>`). Useful for backing up an environment, cloning it, or moving it to another machine. The exported file can be used directly as the **Image file** of another config node.
-- **Unregister** – remove an environment (`wsl --unregister`), with an optional prompt to delete its installation folder.
-- **Deleting a config node** – deleting a config node leaves the WSL environment untouched unless **On delete** is ticked. That option is off by default, so removing a config node, re-importing the flow, or reinstalling the module never destroys an environment. Even when it is ticked, only an environment this config node imported itself is removed; one that already existed on the PC and was simply adopted is never unregistered. Tick it only for environments that are genuinely disposable.
+- **Deleting a config node** – deleting a config node leaves the WSL environment untouched. This module never removes an environment: it has no unregister button and no delete-on-deploy option, so removing a config node, re-importing the flow, or reinstalling the module cannot destroy your data.
+- **Removing an environment** – done by you, from a terminal:
+
+  ```
+  wsl --unregister <name>
+  ```
+
+  Delete the installation folder afterwards if you want the disk space back.
 
 ## Usage Examples
 

@@ -47,8 +47,7 @@
                 },
                 sourceType: { value: "existing" },
                 sourceFile: { value: "" },
-                installLocation: { value: "" },
-                removeOnDelete: { value: false }
+                installLocation: { value: "" }
             },
             label: function () {
                 return this.name || this.distro || "wsl-config";
@@ -60,7 +59,6 @@
                 // The stored value lives in a hidden input; the visible controls
                 // (dropdown for existing, text field for a new import) write to it.
                 $("#node-config-input-sourceType").val(normalizeSourceType(node.sourceType));
-                $("#node-config-input-removeOnDelete").prop("checked", node.removeOnDelete === true);
                 $("#wsl-distro-new").val(savedDistro);
 
                 function syncDistro() {
@@ -199,72 +197,6 @@
                         }
                     });
                 });
-
-                // --- Unregister ---------------------------------------------
-                $("#wsl-config-unregister-btn").on("click", function () {
-                    var distro = $("#node-config-input-distro").val();
-                    if (!distro) {
-                        RED.notify("Environment is not specified.", "error");
-                        return;
-                    }
-
-                    var confirmMsg = "Are you sure you want to unregister \"" + distro + "\"?\n"
-                        + "This deletes the environment and everything in it.\n"
-                        + "This will run: wsl --unregister " + distro;
-                    if (!confirm(confirmMsg)) {
-                        return;
-                    }
-
-                    var btn = $(this);
-                    btn.prop("disabled", true).text("Unregistering...");
-
-                    function unregister(installPath) {
-                        $.ajax({
-                            url: "wsl-config/unregister",
-                            type: "POST",
-                            contentType: "application/json",
-                            data: JSON.stringify({ distro: distro }),
-                            success: function () {
-                                RED.notify("Unregistered: " + distro, "success");
-                                btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                                loadDistros();
-
-                                // Ask about folder deletion if path is available
-                                if (installPath) {
-                                    var deleteMsg = "The installation folder still exists:\n" + installPath
-                                        + "\n\nDo you want to delete this folder?";
-                                    if (confirm(deleteMsg)) {
-                                        $.ajax({
-                                            url: "wsl-config/delete-folder",
-                                            type: "POST",
-                                            contentType: "application/json",
-                                            data: JSON.stringify({ path: installPath }),
-                                            success: function () {
-                                                RED.notify("Folder deleted: " + installPath, "success");
-                                            },
-                                            error: function (jqXHR) {
-                                                var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                                                RED.notify("Failed to delete folder: " + errMsg, "error");
-                                            }
-                                        });
-                                    }
-                                }
-                            },
-                            error: function (jqXHR) {
-                                var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                                RED.notify("Failed to unregister: " + errMsg, "error");
-                                btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                            }
-                        });
-                    }
-
-                    // Get install path first, then unregister
-                    $.getJSON("wsl-config/distro-path/" + encodeURIComponent(distro), function (pathData) {
-                        unregister(pathData.path);
-                    }).fail(function () {
-                        unregister("");
-                    });
-                });
             },
             oneditsave: function () {
                 // Guard against the hidden input being read before the last
@@ -333,13 +265,6 @@
     </div>
 
     <div class="form-row wsl-src-import">
-        <label for="node-config-input-removeOnDelete"><i class="fa fa-trash-o"></i> On delete</label>
-        <input type="checkbox" id="node-config-input-removeOnDelete" style="display:inline-block; width:auto; vertical-align:top;">
-        <span>Unregister this environment when the config node is deleted</span>
-        <div class="form-tips"><b>Off by default.</b> While it is off, removing this config node &ndash; or re-importing the flow &ndash; leaves the environment on disk, so it can simply be picked up again afterwards.</div>
-    </div>
-
-    <div class="form-row wsl-src-import">
         <div class="form-tips" style="margin-left: 105px;">
             <i class="fa fa-info-circle"></i> The image is imported when the flow is <b>deployed</b>, and only if no environment with that name exists yet. Progress ("Importing...") is shown as the status of <b>wsl-ubuntu</b> nodes using this config.
         </div>
@@ -356,15 +281,6 @@
             <i class="fa fa-download"></i> Export
         </button>
         <div class="form-tips">Exports the environment selected above to a .tar file: <code>wsl --export</code>. The result can be used as the <b>Image file</b> of another config node.</div>
-    </div>
-
-    <hr/>
-    <h4 style="margin-left: 105px;"><i class="fa fa-trash"></i> Unregister</h4>
-    <div class="form-row">
-        <button type="button" id="wsl-config-unregister-btn" class="red-ui-button" style="margin-left: 105px;">
-            <i class="fa fa-trash"></i> Unregister
-        </button>
-        <div class="form-tips"><b>Warning:</b> Unregister removes the WSL environment and everything inside it. You will be asked whether to also delete the installation folder.</div>
     </div>
 </script>
 
@@ -390,11 +306,9 @@
     </ul>
 
     <h3>Deleting the config node</h3>
-    <p>Deleting a config node leaves the WSL environment untouched unless <b>On delete</b> is ticked. With it ticked, an environment that <i>this config node imported itself</i> is removed with <code>wsl --unregister</code> when the node is deleted and the change is deployed &ndash; which also means re-importing the flow destroys it, so leave it off unless the environment is genuinely disposable. An environment that already existed on this PC is never unregistered this way, even with the option ticked.</p>
+    <p>This node never removes a WSL environment. Deleting the config node only drops the reference to it, so the environment and everything in it stay on disk and can be picked up again by a new config node.</p>
+    <p>To remove an environment, do it yourself from a terminal: <code>wsl --unregister &lt;name&gt;</code>, then delete its installation folder if you want the disk space back.</p>
 
     <h3>Export</h3>
     <p>Exports the selected environment to a <code>.tar</code> image file by running <code>wsl --export &lt;distro&gt; &lt;file&gt;</code>. Large environments may take several minutes. The exported file can be used as the <b>Image file</b> of another config node, for example to clone an environment or move it to another machine.</p>
-
-    <h3>Unregister</h3>
-    <p>The "Unregister" button removes the WSL environment by running <code>wsl --unregister</code>. After unregistering, you will be asked whether to also delete the installation folder (the absolute path will be shown).</p>
 </script>
