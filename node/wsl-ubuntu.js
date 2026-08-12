@@ -81,9 +81,6 @@ module.exports = function (RED) {
                 case "starting":
                     node.status({ fill: "blue", shape: "ring", text: "Preparing environment..." });
                     break;
-                case "downloading":
-                    node.status({ fill: "blue", shape: "ring", text: "Downloading image..." });
-                    break;
                 case "importing":
                     node.status({ fill: "blue", shape: "ring", text: "Importing..." });
                     break;

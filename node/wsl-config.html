@@ -1,166 +1,288 @@
 <script type="text/javascript">
-    RED.nodes.registerType('wsl-config', {
-        category: 'config',
-        defaults: {
-            name: { value: "" },
-            distro: { value: "", required: true },
-            sourceType: { value: "existing" },
-            sourceFile: { value: "" },
-            sourceRelease: { value: "" },
-            installLocation: { value: "" },
-            imageLocation: { value: "" }
-        },
-        label: function () {
-            return this.name || this.distro || "wsl-config";
-        },
-        oneditprepare: function () {
-            const node = this;
+    (function () {
+        // Names of the distributions installed on this PC, refreshed every time
+        // an edit dialog is opened. validate() needs them synchronously, so they
+        // are cached here rather than fetched on demand.
+        var wslKnownDistros = [];
 
-            function loadDistros() {
-                $.getJSON("wsl-config/distros", function (distros) {
-                    const datalist = $("#wsl-distro-list");
-                    datalist.empty();
-                    distros.forEach(function (d) {
-                        datalist.append($("<option>").val(d.name));
-                    });
-                });
+        // "file" and "download" are the pre-0.0.5 names of the "import" source.
+        function normalizeSourceType(sourceType) {
+            if (sourceType === "import" || sourceType === "file" || sourceType === "download") {
+                return "import";
             }
-            loadDistros();
-
-            // Populate the downloadable-image dropdown from the server catalog.
-            $.getJSON("wsl-config/images", function (data) {
-                const sel = $("#node-config-input-sourceRelease");
-                sel.empty();
-                sel.append($("<option>").val("").text("-- select an Ubuntu release --"));
-                (data.images || []).forEach(function (img) {
-                    const opt = $("<option>").val(img.key).text(img.label);
-                    if (!img.available) {
-                        opt.prop("disabled", true).text(img.label + " (not available for " + data.arch + ")");
-                    }
-                    sel.append(opt);
-                });
-                sel.val(node.sourceRelease || "");
-            });
-
-            // Show only the inputs relevant to the chosen source type.
-            function updateVisibility() {
-                const type = $("#node-config-input-sourceType").val();
-                $(".wsl-src-file").toggle(type === "file");
-                $(".wsl-src-download").toggle(type === "download");
-                $(".wsl-src-location").toggle(type === "file" || type === "download");
-            }
-            $("#node-config-input-sourceType").on("change", updateVisibility);
-            updateVisibility();
-
-            // --- Export -------------------------------------------------
-            $("#wsl-config-export-btn").on("click", function () {
-                const distro = $("#node-config-input-distro").val();
-                const file = $("#wsl-config-export-file").val();
-                if (!distro) {
-                    RED.notify("Distro name is not specified.", "error");
-                    return;
-                }
-                if (!file) {
-                    RED.notify("Export file path is not specified.", "error");
-                    return;
-                }
-
-                const btn = $(this);
-                btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Exporting...');
-                $.ajax({
-                    url: "wsl-config/export",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({ distro: distro, file: file }),
-                    success: function () {
-                        RED.notify("Exported \"" + distro + "\" to " + file, "success");
-                        btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
-                    },
-                    error: function (jqXHR) {
-                        const errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                        RED.notify("Failed to export: " + errMsg, "error");
-                        btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
-                    }
-                });
-            });
-
-            // --- Unregister ---------------------------------------------
-            $("#wsl-config-unregister-btn").on("click", function () {
-                const distro = $("#node-config-input-distro").val();
-                if (!distro) {
-                    RED.notify("Distro name is not specified.", "error");
-                    return;
-                }
-
-                var confirmMsg = "Are you sure you want to unregister \"" + distro + "\"?\nThis will run: wsl --unregister " + distro;
-                if (!confirm(confirmMsg)) {
-                    return;
-                }
-
-                var btn = $(this);
-                btn.prop("disabled", true).text("Unregistering...");
-
-                // Get install path first, then unregister
-                $.getJSON("wsl-config/distro-path/" + encodeURIComponent(distro), function (pathData) {
-                    $.ajax({
-                        url: "wsl-config/unregister",
-                        type: "POST",
-                        contentType: "application/json",
-                        data: JSON.stringify({ distro: distro }),
-                        success: function (resp) {
-                            RED.notify("Unregistered: " + distro, "success");
-                            btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                            loadDistros();
-
-                            // Ask about folder deletion if path is available
-                            if (pathData.path) {
-                                var deleteMsg = "The installation folder still exists:\n" + pathData.path + "\n\nDo you want to delete this folder?";
-                                if (confirm(deleteMsg)) {
-                                    $.ajax({
-                                        url: "wsl-config/delete-folder",
-                                        type: "POST",
-                                        contentType: "application/json",
-                                        data: JSON.stringify({ path: pathData.path }),
-                                        success: function () {
-                                            RED.notify("Folder deleted: " + pathData.path, "success");
-                                        },
-                                        error: function (jqXHR) {
-                                            var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                                            RED.notify("Failed to delete folder: " + errMsg, "error");
-                                        }
-                                    });
-                                }
-                            }
-                        },
-                        error: function (jqXHR) {
-                            var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                            RED.notify("Failed to unregister: " + errMsg, "error");
-                            btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                        }
-                    });
-                }).fail(function () {
-                    // Path lookup failed, proceed with unregister without folder deletion
-                    $.ajax({
-                        url: "wsl-config/unregister",
-                        type: "POST",
-                        contentType: "application/json",
-                        data: JSON.stringify({ distro: distro }),
-                        success: function (resp) {
-                            RED.notify("Unregistered: " + distro, "success");
-                            btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                            loadDistros();
-                        },
-                        error: function (jqXHR) {
-                            var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                            RED.notify("Failed to unregister: " + errMsg, "error");
-                            btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
-                        }
-                    });
-                });
-            });
+            return "existing";
         }
-    });
+
+        // While the edit dialog is open the node still holds its saved
+        // sourceType, so the value selected in the dialog is the current one.
+        function editingSourceType(node) {
+            var el = $("#node-config-input-sourceType");
+            if (el.length === 1) {
+                return el.val();
+            }
+            return normalizeSourceType(node.sourceType);
+        }
+
+        function isValidDistroName(name) {
+            return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+        }
+
+        RED.nodes.registerType('wsl-config', {
+            category: 'config',
+            defaults: {
+                name: { value: "" },
+                distro: {
+                    value: "",
+                    required: true,
+                    validate: function (v) {
+                        var name = (v || "").trim();
+                        if (!name) return false;
+                        if (editingSourceType(this) !== "import") return true;
+                        if (!isValidDistroName(name)) return false;
+                        // The name this node already uses stays valid: once the
+                        // import has run, the distribution does exist.
+                        if (name === (this.distro || "").trim()) return true;
+                        return wslKnownDistros.indexOf(name) === -1;
+                    }
+                },
+                sourceType: { value: "existing" },
+                sourceFile: { value: "" },
+                installLocation: { value: "" },
+                removeOnDelete: { value: false }
+            },
+            label: function () {
+                return this.name || this.distro || "wsl-config";
+            },
+            oneditprepare: function () {
+                var node = this;
+                var savedDistro = (node.distro || "").trim();
+
+                // The stored value lives in a hidden input; the visible controls
+                // (dropdown for existing, text field for a new import) write to it.
+                $("#node-config-input-sourceType").val(normalizeSourceType(node.sourceType));
+                $("#node-config-input-removeOnDelete").prop("checked", node.removeOnDelete === true);
+                $("#wsl-distro-new").val(savedDistro);
+
+                function syncDistro() {
+                    var value = $("#node-config-input-sourceType").val() === "import"
+                        ? $("#wsl-distro-new").val().trim()
+                        : ($("#wsl-distro-select").val() || "");
+                    $("#node-config-input-distro").val(value);
+                    RED.nodes.dirty(true);
+                }
+
+                // Warn about a name that is already taken as soon as it is typed.
+                function updateNameFeedback() {
+                    var hint = $("#wsl-distro-new-hint");
+                    var name = $("#wsl-distro-new").val().trim();
+                    if (!name) {
+                        hint.text("").removeClass("wsl-hint-error");
+                        return;
+                    }
+                    if (!isValidDistroName(name)) {
+                        hint.text("Use letters, digits, dot, dash and underscore only.").addClass("wsl-hint-error");
+                        return;
+                    }
+                    if (name !== savedDistro && wslKnownDistros.indexOf(name) !== -1) {
+                        hint.text('"' + name + '" already exists. Choose a name that is not in use, '
+                            + 'or switch to "Use existing environment".').addClass("wsl-hint-error");
+                        return;
+                    }
+                    hint.text("").removeClass("wsl-hint-error");
+                }
+
+                function loadDistros(done) {
+                    $.getJSON("wsl-config/distros", function (distros) {
+                        wslKnownDistros = distros.map(function (d) { return d.name; });
+
+                        var select = $("#wsl-distro-select");
+                        var selected = $("#node-config-input-distro").val() || savedDistro;
+                        select.empty();
+
+                        if (distros.length === 0) {
+                            select.append($("<option>").val("").text("-- no WSL distribution found --"));
+                        } else {
+                            select.append($("<option>").val("").text("-- select an environment --"));
+                        }
+
+                        distros.forEach(function (d) {
+                            select.append($("<option>").val(d.name)
+                                .text(d.name + "  (WSL" + d.version + ", " + d.state + ")"));
+                        });
+
+                        // Keep a configured environment selectable even when it is
+                        // gone, so a missing one is visible instead of silently reset.
+                        if (selected && wslKnownDistros.indexOf(selected) === -1) {
+                            select.append($("<option>").val(selected)
+                                .text(selected + "  (not installed)"));
+                        }
+
+                        select.val(selected || "");
+                        updateNameFeedback();
+                        if (done) done();
+                    }).fail(function () {
+                        $("#wsl-distro-select").empty()
+                            .append($("<option>").val("").text("-- could not read the distribution list --"));
+                        if (done) done();
+                    });
+                }
+                loadDistros(syncDistro);
+
+                // Show only the inputs relevant to the chosen source.
+                function updateVisibility() {
+                    var type = $("#node-config-input-sourceType").val();
+                    $(".wsl-src-existing").toggle(type === "existing");
+                    $(".wsl-src-import").toggle(type === "import");
+                }
+
+                $("#node-config-input-sourceType").on("change", function () {
+                    updateVisibility();
+                    syncDistro();
+                });
+                $("#wsl-distro-select").on("change", syncDistro);
+                $("#wsl-distro-new").on("input", function () {
+                    updateNameFeedback();
+                    syncDistro();
+                });
+                $("#wsl-distro-refresh-btn").on("click", function () {
+                    loadDistros();
+                });
+                updateVisibility();
+
+                // --- Image file check ---------------------------------------
+                $("#wsl-image-check-btn").on("click", function () {
+                    var file = $("#node-config-input-sourceFile").val();
+                    if (!file) {
+                        RED.notify("Image file path is not specified.", "error");
+                        return;
+                    }
+                    $.getJSON("wsl-config/check-image", { path: file }, function (data) {
+                        if (data.exists) {
+                            var mb = (data.size / (1024 * 1024)).toFixed(1);
+                            RED.notify("Image file found (" + mb + " MB).", "success");
+                        } else {
+                            RED.notify("Image file not found: " + (data.error || "unknown error"), "error");
+                        }
+                    }).fail(function () {
+                        RED.notify("Could not check the image file.", "error");
+                    });
+                });
+
+                // --- Export -------------------------------------------------
+                $("#wsl-config-export-btn").on("click", function () {
+                    var distro = $("#node-config-input-distro").val();
+                    var file = $("#wsl-config-export-file").val();
+                    if (!distro) {
+                        RED.notify("Environment is not specified.", "error");
+                        return;
+                    }
+                    if (!file) {
+                        RED.notify("Export file path is not specified.", "error");
+                        return;
+                    }
+
+                    var btn = $(this);
+                    btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Exporting...');
+                    $.ajax({
+                        url: "wsl-config/export",
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify({ distro: distro, file: file }),
+                        success: function () {
+                            RED.notify("Exported \"" + distro + "\" to " + file, "success");
+                            btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
+                        },
+                        error: function (jqXHR) {
+                            var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
+                            RED.notify("Failed to export: " + errMsg, "error");
+                            btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
+                        }
+                    });
+                });
+
+                // --- Unregister ---------------------------------------------
+                $("#wsl-config-unregister-btn").on("click", function () {
+                    var distro = $("#node-config-input-distro").val();
+                    if (!distro) {
+                        RED.notify("Environment is not specified.", "error");
+                        return;
+                    }
+
+                    var confirmMsg = "Are you sure you want to unregister \"" + distro + "\"?\n"
+                        + "This deletes the environment and everything in it.\n"
+                        + "This will run: wsl --unregister " + distro;
+                    if (!confirm(confirmMsg)) {
+                        return;
+                    }
+
+                    var btn = $(this);
+                    btn.prop("disabled", true).text("Unregistering...");
+
+                    function unregister(installPath) {
+                        $.ajax({
+                            url: "wsl-config/unregister",
+                            type: "POST",
+                            contentType: "application/json",
+                            data: JSON.stringify({ distro: distro }),
+                            success: function () {
+                                RED.notify("Unregistered: " + distro, "success");
+                                btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
+                                loadDistros();
+
+                                // Ask about folder deletion if path is available
+                                if (installPath) {
+                                    var deleteMsg = "The installation folder still exists:\n" + installPath
+                                        + "\n\nDo you want to delete this folder?";
+                                    if (confirm(deleteMsg)) {
+                                        $.ajax({
+                                            url: "wsl-config/delete-folder",
+                                            type: "POST",
+                                            contentType: "application/json",
+                                            data: JSON.stringify({ path: installPath }),
+                                            success: function () {
+                                                RED.notify("Folder deleted: " + installPath, "success");
+                                            },
+                                            error: function (jqXHR) {
+                                                var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
+                                                RED.notify("Failed to delete folder: " + errMsg, "error");
+                                            }
+                                        });
+                                    }
+                                }
+                            },
+                            error: function (jqXHR) {
+                                var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
+                                RED.notify("Failed to unregister: " + errMsg, "error");
+                                btn.prop("disabled", false).html('<i class="fa fa-trash"></i> Unregister');
+                            }
+                        });
+                    }
+
+                    // Get install path first, then unregister
+                    $.getJSON("wsl-config/distro-path/" + encodeURIComponent(distro), function (pathData) {
+                        unregister(pathData.path);
+                    }).fail(function () {
+                        unregister("");
+                    });
+                });
+            },
+            oneditsave: function () {
+                // Guard against the hidden input being read before the last
+                // change event landed.
+                this.distro = ($("#node-config-input-sourceType").val() === "import"
+                    ? $("#wsl-distro-new").val().trim()
+                    : ($("#wsl-distro-select").val() || ""));
+                $("#node-config-input-distro").val(this.distro);
+            }
+        });
+    })();
 </script>
+
+<style>
+    .wsl-hint-error {
+        color: #a94442;
+    }
+</style>
 
 <script type="text/html" data-template-name="wsl-config">
     <div class="form-row">
@@ -171,44 +293,55 @@
     <div class="form-row">
         <label for="node-config-input-sourceType"><i class="fa fa-cubes"></i> Source</label>
         <select id="node-config-input-sourceType" style="width:70%;">
-            <option value="existing">Use existing distribution</option>
-            <option value="file">Import from local image file</option>
-            <option value="download">Download &amp; install clean Ubuntu</option>
+            <option value="existing">Use existing environment</option>
+            <option value="import">Create new environment (import image file)</option>
         </select>
     </div>
 
-    <div class="form-row">
-        <label for="node-config-input-distro"><i class="fa fa-linux"></i> Distro</label>
-        <input type="text" id="node-config-input-distro" list="wsl-distro-list" placeholder="e.g. Ubuntu-22.04">
-        <datalist id="wsl-distro-list"></datalist>
-        <div class="form-tips">For existing distributions, pick from the list. For import/download, this is the new distribution name.</div>
+    <!-- The stored distribution name; the controls below write into it. -->
+    <input type="hidden" id="node-config-input-distro">
+
+    <div class="form-row wsl-src-existing">
+        <label for="wsl-distro-select"><i class="fa fa-linux"></i> Environment</label>
+        <select id="wsl-distro-select" style="width:60%;"></select>
+        <button type="button" id="wsl-distro-refresh-btn" class="red-ui-button" title="Reload the list">
+            <i class="fa fa-refresh"></i>
+        </button>
+        <div class="form-tips">WSL environments already installed on this PC, detected with <code>wsl -l -v</code>. Selecting one here only uses it &ndash; nothing is created or overwritten.</div>
     </div>
 
-    <div class="form-row wsl-src-file">
+    <div class="form-row wsl-src-import">
+        <label for="wsl-distro-new"><i class="fa fa-linux"></i> New name</label>
+        <input type="text" id="wsl-distro-new" placeholder="e.g. Ubuntu2204_MyProject">
+        <div class="form-tips" id="wsl-distro-new-hint"></div>
+        <div class="form-tips">Name for the environment to create. It must not match an environment that already exists.</div>
+    </div>
+
+    <div class="form-row wsl-src-import">
         <label for="node-config-input-sourceFile"><i class="fa fa-file-archive-o"></i> Image file</label>
-        <input type="text" id="node-config-input-sourceFile" placeholder="e.g. C:\backup\ubuntu.tar.gz">
+        <input type="text" id="node-config-input-sourceFile" style="width:60%;" placeholder="e.g. C:\wsl\images\ubuntu-22.04.tar.gz">
+        <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
+            <i class="fa fa-check"></i>
+        </button>
+        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; use an image exported with the Export button below, or one you downloaded yourself.</div>
     </div>
 
-    <div class="form-row wsl-src-download">
-        <label for="node-config-input-sourceRelease"><i class="fa fa-cloud-download"></i> Ubuntu image</label>
-        <select id="node-config-input-sourceRelease" style="width:70%;"></select>
-    </div>
-
-    <div class="form-row wsl-src-download">
-        <label for="node-config-input-imageLocation"><i class="fa fa-folder"></i> Image folder</label>
-        <input type="text" id="node-config-input-imageLocation" placeholder="e.g. C:\wsl\images (optional)">
-        <div class="form-tips">Folder where the downloaded <code>.tar.gz</code> image file is saved. If set, the image is kept and reused for later imports. If empty, a temporary file is used and deleted after import.</div>
-    </div>
-
-    <div class="form-row wsl-src-location">
+    <div class="form-row wsl-src-import">
         <label for="node-config-input-installLocation"><i class="fa fa-folder-open"></i> Install to</label>
-        <input type="text" id="node-config-input-installLocation" placeholder="e.g. C:\wsl\Ubuntu-24.04 (optional)">
-        <div class="form-tips">Folder where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;distro&gt;</code> if empty.</div>
+        <input type="text" id="node-config-input-installLocation" placeholder="e.g. C:\wsl\Ubuntu2204_MyProject (optional)">
+        <div class="form-tips">Folder where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;name&gt;</code> if empty.</div>
     </div>
 
-    <div class="form-row wsl-src-location">
+    <div class="form-row wsl-src-import">
+        <label for="node-config-input-removeOnDelete"><i class="fa fa-trash-o"></i> On delete</label>
+        <input type="checkbox" id="node-config-input-removeOnDelete" style="display:inline-block; width:auto; vertical-align:top;">
+        <span>Unregister this environment when the config node is deleted</span>
+        <div class="form-tips"><b>Off by default.</b> While it is off, removing this config node &ndash; or re-importing the flow &ndash; leaves the environment on disk, so it can simply be picked up again afterwards.</div>
+    </div>
+
+    <div class="form-row wsl-src-import">
         <div class="form-tips" style="margin-left: 105px;">
-            <i class="fa fa-info-circle"></i> The distribution is downloaded/imported automatically when the flow is <b>deployed</b>, if it is not installed yet. Progress ("Downloading image...", "Importing...") is shown as the status of <b>wsl-ubuntu</b> nodes using this config. Deleting this config node also unregisters the distribution it created.
+            <i class="fa fa-info-circle"></i> The image is imported when the flow is <b>deployed</b>, and only if no environment with that name exists yet. Progress ("Importing...") is shown as the status of <b>wsl-ubuntu</b> nodes using this config.
         </div>
     </div>
 
@@ -222,7 +355,7 @@
         <button type="button" id="wsl-config-export-btn" class="red-ui-button" style="margin-left: 105px;">
             <i class="fa fa-download"></i> Export
         </button>
-        <div class="form-tips">Exports the <b>Distro</b> selected above to a .tar file: <code>wsl --export</code></div>
+        <div class="form-tips">Exports the environment selected above to a .tar file: <code>wsl --export</code>. The result can be used as the <b>Image file</b> of another config node.</div>
     </div>
 
     <hr/>
@@ -231,34 +364,37 @@
         <button type="button" id="wsl-config-unregister-btn" class="red-ui-button" style="margin-left: 105px;">
             <i class="fa fa-trash"></i> Unregister
         </button>
-        <div class="form-tips"><b>Warning:</b> Unregister will remove the WSL distribution. You will be asked whether to also delete the installation folder.</div>
+        <div class="form-tips"><b>Warning:</b> Unregister removes the WSL environment and everything inside it. You will be asked whether to also delete the installation folder.</div>
     </div>
 </script>
 
 <script type="text/html" data-help-name="wsl-config">
-    <p>Configuration node for selecting and managing WSL (Windows Subsystem for Linux) distributions, used to manage multiple Ubuntu environments.</p>
+    <p>Configuration node for selecting and managing WSL (Windows Subsystem for Linux) environments, used to manage multiple Ubuntu environments.</p>
 
     <h3>Source</h3>
-    <p>Choose how the environment is provisioned:</p>
+    <p>Choose how the environment is obtained:</p>
     <ul>
-        <li><b>Use existing distribution</b> &ndash; point at a distribution already installed (detected with <code>wsl -l -v</code>).</li>
-        <li><b>Import from local image file</b> &ndash; create a new distribution from a <code>.tar</code>/<code>.tar.gz</code> image on disk (<code>wsl --import</code>).</li>
-        <li><b>Download &amp; install clean Ubuntu</b> &ndash; download an official Ubuntu WSL <code>.tar.gz</code> image from the internet and import it. Only WSL-targeted releases are offered (currently 22.04 and 24.04; Ubuntu 20.04 has no WSL image).</li>
+        <li><b>Use existing environment</b> &ndash; pick one of the environments already installed on this PC from the dropdown. The list is read with <code>wsl -l -v</code> and can be reloaded with the refresh button. The environment is only used; it is never modified or removed by deploying.</li>
+        <li><b>Create new environment (import image file)</b> &ndash; create a new environment from a <code>.tar</code> / <code>.tar.gz</code> image stored on this PC (<code>wsl --import</code>). The name must not be one that already exists; the editor rejects a duplicate name.</li>
     </ul>
+    <p>No image is ever downloaded from the internet. To create a clean environment, obtain an image yourself (for example an Ubuntu WSL rootfs, or an <b>Export</b> of an environment you already have) and point <b>Image file</b> at it.</p>
 
-    <h3>Provisioning</h3>
-    <p>For the import and download options, provisioning runs automatically when the flow is <b>deployed</b> and the distribution is not installed yet. While it runs, <code>wsl-ubuntu</code> nodes using this config show the progress as their node status ("Downloading image...", "Importing...") and reject commands until the environment is ready.</p>
+    <h3>Reusing an environment</h3>
+    <p>Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and no import runs. Reinstalling this module, or importing the flow on a PC that already has the environment, therefore picks the existing environment back up rather than recreating it.</p>
+
+    <h3>Importing</h3>
+    <p>The import runs automatically when the flow is <b>deployed</b> and no environment with that name exists yet. While it runs, <code>wsl-ubuntu</code> nodes using this config show <b>Importing...</b> as their node status and reject commands until the environment is ready.</p>
     <ul>
-        <li><b>Image folder</b> &ndash; where the downloaded image file is saved. If set, the file is kept and reused; if empty, a temporary file is used and deleted after import.</li>
-        <li><b>Install to</b> &ndash; where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;distro&gt;</code>.</li>
+        <li><b>Image file</b> &ndash; the <code>.tar</code> / <code>.tar.gz</code> image on this PC to import. The check button verifies that the path exists.</li>
+        <li><b>Install to</b> &ndash; where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;name&gt;</code>.</li>
     </ul>
 
     <h3>Deleting the config node</h3>
-    <p>When a config node whose source is import/download is deleted (and the change is deployed), the distribution it created is automatically removed with <code>wsl --unregister</code>. Config nodes that reference an existing distribution leave it untouched.</p>
+    <p>Deleting a config node leaves the WSL environment untouched unless <b>On delete</b> is ticked. With it ticked, an environment that <i>this config node imported itself</i> is removed with <code>wsl --unregister</code> when the node is deleted and the change is deployed &ndash; which also means re-importing the flow destroys it, so leave it off unless the environment is genuinely disposable. An environment that already existed on this PC is never unregistered this way, even with the option ticked.</p>
 
     <h3>Export</h3>
-    <p>Exports the selected <b>Distro</b> to a <code>.tar</code> image file by running <code>wsl --export &lt;distro&gt; &lt;file&gt;</code>. Large distributions may take several minutes.</p>
+    <p>Exports the selected environment to a <code>.tar</code> image file by running <code>wsl --export &lt;distro&gt; &lt;file&gt;</code>. Large environments may take several minutes. The exported file can be used as the <b>Image file</b> of another config node, for example to clone an environment or move it to another machine.</p>
 
     <h3>Unregister</h3>
-    <p>The "Unregister" button removes the WSL distribution by running <code>wsl --unregister</code>. After unregistering, you will be asked whether to also delete the installation folder (the absolute path will be shown).</p>
+    <p>The "Unregister" button removes the WSL environment by running <code>wsl --unregister</code>. After unregistering, you will be asked whether to also delete the installation folder (the absolute path will be shown).</p>
 </script>

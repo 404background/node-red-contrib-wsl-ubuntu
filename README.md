@@ -134,28 +134,36 @@ When "Continuous" mode is disabled, command output is sent as a single message a
 
 The **wsl-config** configuration node lets you manage several Ubuntu environments and select which one a `wsl-ubuntu` node runs against.
 
-In the `wsl-ubuntu` node, choose a **WSL Config** to pick the target distribution. Each config node represents one environment, so you can keep multiple independent Ubuntu environments (for example one per project) side by side.
+In the `wsl-ubuntu` node, choose a **WSL Config** to pick the target environment. Each config node represents one environment, so you can keep multiple independent Ubuntu environments (for example one per project) side by side.
 
-### Provisioning an environment
+### Choosing an environment
 
 When a config node is created, you choose a **Source**:
 
-- **Use existing distribution** – point at a distribution already installed. Installed distributions are detected automatically with `wsl -l -v`.
-- **Import from local image file** – create a new distribution from a `.tar` / `.tar.gz` image on disk (`wsl --import <new name> <install location> <file>`).
-- **Download & install clean Ubuntu** – download an official Ubuntu WSL `.tar.gz` image from the internet and import it. Only WSL-targeted releases are offered (currently **22.04** and **24.04**; Ubuntu 20.04 has no WSL image). The image is fetched for your host architecture (amd64/arm64) automatically.
+- **Use existing environment** – pick one of the environments already installed on this PC from a dropdown. The list is read with `wsl -l -v` and can be reloaded with the refresh button. The environment is only used; deploying never modifies or removes it.
+- **Create new environment (import image file)** – create a new environment from a `.tar` / `.tar.gz` image stored on this PC (`wsl --import <new name> <install location> <file>`).
 
-For the import/download options you can configure the paths used for provisioning:
+**No image is ever downloaded from the internet.** To create a clean environment, obtain an image yourself and point **Image file** at its path — for example an Ubuntu WSL rootfs you downloaded, or an **Export** of an environment you already have.
 
-- **Image folder** – where the downloaded `.tar.gz` image file is saved. If set, the image is kept and reused for later imports; if empty, a temporary file is used and deleted after import.
-- **Install to** – where the WSL environment (virtual disk) is created. Defaults to `<home>\wsl\<distro>` if empty. The folder is created automatically.
+### Creating a new environment
 
-Provisioning runs automatically when the flow is **deployed** and the distribution is not installed yet. While it runs, `wsl-ubuntu` nodes using the config show the progress as their node status (**Downloading image...**, **Importing...**) and reject commands until the environment is ready. To build another environment, add another config node.
+- **New name** – the name of the environment to create. It must not match an environment that already exists; the editor rejects a duplicate name and the node refuses to deploy until it is unique. Use letters, digits, dot, dash and underscore.
+- **Image file** – path to the `.tar` / `.tar.gz` image on this PC. The check button next to the field verifies that the path exists before you deploy.
+- **Install to** – folder where the WSL environment (virtual disk) is created. Defaults to `<home>\wsl\<name>` if empty. The folder is created automatically.
+
+The import runs when the flow is **deployed**, and only if no environment with that name exists yet. While it runs, `wsl-ubuntu` nodes using the config show **Importing...** as their node status and reject commands until the environment is ready. To build another environment, add another config node.
+
+### Reusing an environment after a reinstall
+
+Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and **no import runs**.
+
+This means that reinstalling this module, or importing the flow on a PC that already holds the environment, picks the existing environment back up instead of recreating it — the data inside it is preserved. The same applies to config nodes saved with the older "import from local image file" or "download" sources.
 
 ### Managing an environment
 
-- **Export** – save the selected distribution to a `.tar` image file (`wsl --export <distro> <file>`). Useful for backing up or moving an environment between machines.
-- **Unregister** – remove a distribution (`wsl --unregister`), with an optional prompt to delete its installation folder.
-- **Deleting a config node** – when a config node whose source is import/download is deleted (and the change is deployed), the distribution it created is automatically removed with `wsl --unregister`. Config nodes that reference an existing distribution leave it untouched.
+- **Export** – save the selected environment to a `.tar` image file (`wsl --export <distro> <file>`). Useful for backing up an environment, cloning it, or moving it to another machine. The exported file can be used directly as the **Image file** of another config node.
+- **Unregister** – remove an environment (`wsl --unregister`), with an optional prompt to delete its installation folder.
+- **Deleting a config node** – deleting a config node leaves the WSL environment untouched unless **On delete** is ticked. That option is off by default, so removing a config node, re-importing the flow, or reinstalling the module never destroys an environment. Even when it is ticked, only an environment this config node imported itself is removed; one that already existed on the PC and was simply adopted is never unregistered. Tick it only for environments that are genuinely disposable.
 
 ## Usage Examples
 
