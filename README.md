@@ -143,7 +143,7 @@ When a config node is created, you choose a **Source**:
 - **Use existing environment** – pick one of the environments already installed on this PC from a dropdown. The list is read with `wsl -l -v` and can be reloaded with the refresh button. The environment is only used; deploying never modifies or removes it.
 - **Create new environment (import image file)** – create a new environment from a `.tar` / `.tar.gz` image stored on this PC (`wsl --import <new name> <install location> <file>`).
 
-**No image is ever downloaded from the internet.** To create a clean environment, obtain an image yourself and point **Image file** at its path — for example an Ubuntu WSL rootfs you downloaded, or an **Export** of an environment you already have.
+**No image is ever downloaded from the internet.** To create a clean environment, obtain an image yourself and point **Image file** at its path — for example an Ubuntu WSL rootfs you downloaded, or a `wsl --export` of an environment you already have.
 
 ### Creating a new environment
 
@@ -161,7 +161,6 @@ This means that reinstalling this module, or importing the flow on a PC that alr
 
 ### Managing an environment
 
-- **Export** – save the selected environment to a `.tar` image file (`wsl --export <distro> <file>`). Useful for backing up an environment, cloning it, or moving it to another machine. The exported file can be used directly as the **Image file** of another config node.
 - **Deleting a config node** – deleting a config node leaves the WSL environment untouched. This module never removes an environment: it has no unregister button and no delete-on-deploy option, so removing a config node, re-importing the flow, or reinstalling the module cannot destroy your data.
 - **Removing an environment** – done by you, from a terminal:
 

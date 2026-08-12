@@ -221,28 +221,4 @@ module.exports = function (RED) {
             res.json({ exists: true, size: stat.size });
         });
     });
-
-    // Export a distribution to a .tar file: wsl --export <distro> <file>
-    RED.httpAdmin.post("/wsl-config/export", function (req, res) {
-        const distroName = req.body.distro;
-        const filePath = req.body.file;
-        if (!distroName) {
-            return res.status(400).json({ error: "Distro name is required" });
-        }
-        if (!filePath) {
-            return res.status(400).json({ error: "Export file path is required" });
-        }
-        if (!/^[A-Za-z]:\\/.test(filePath)) {
-            return res.status(400).json({ error: "Export file path must be an absolute Windows path (e.g. C:\\backup\\ubuntu.tar)" });
-        }
-
-        // Export of a large distro can take minutes; do not time out.
-        execFile("wsl.exe", ["--export", distroName, filePath], { encoding: "buffer", windowsHide: true, timeout: 0 }, (error, stdout) => {
-            if (error) {
-                const message = decodeWslOutput(stdout) || error.message;
-                return res.status(500).json({ error: message });
-            }
-            res.json({ message: decodeWslOutput(stdout) || "Exported successfully" });
-        });
-    });
 };

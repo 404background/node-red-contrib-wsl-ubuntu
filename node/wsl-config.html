@@ -165,38 +165,6 @@
                         RED.notify("Could not check the image file.", "error");
                     });
                 });
-
-                // --- Export -------------------------------------------------
-                $("#wsl-config-export-btn").on("click", function () {
-                    var distro = $("#node-config-input-distro").val();
-                    var file = $("#wsl-config-export-file").val();
-                    if (!distro) {
-                        RED.notify("Environment is not specified.", "error");
-                        return;
-                    }
-                    if (!file) {
-                        RED.notify("Export file path is not specified.", "error");
-                        return;
-                    }
-
-                    var btn = $(this);
-                    btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i> Exporting...');
-                    $.ajax({
-                        url: "wsl-config/export",
-                        type: "POST",
-                        contentType: "application/json",
-                        data: JSON.stringify({ distro: distro, file: file }),
-                        success: function () {
-                            RED.notify("Exported \"" + distro + "\" to " + file, "success");
-                            btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
-                        },
-                        error: function (jqXHR) {
-                            var errMsg = jqXHR.responseJSON ? jqXHR.responseJSON.error : "Unknown error";
-                            RED.notify("Failed to export: " + errMsg, "error");
-                            btn.prop("disabled", false).html('<i class="fa fa-download"></i> Export');
-                        }
-                    });
-                });
             },
             oneditsave: function () {
                 // Guard against the hidden input being read before the last
@@ -255,7 +223,7 @@
         <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
             <i class="fa fa-check"></i>
         </button>
-        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; use an image exported with the Export button below, or one you downloaded yourself.</div>
+        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; use an image you obtained yourself, for example an Ubuntu WSL rootfs or a <code>wsl --export</code> of an environment you already have.</div>
     </div>
 
     <div class="form-row wsl-src-import">
@@ -269,19 +237,6 @@
             <i class="fa fa-info-circle"></i> The image is imported when the flow is <b>deployed</b>, and only if no environment with that name exists yet. Progress ("Importing...") is shown as the status of <b>wsl-ubuntu</b> nodes using this config.
         </div>
     </div>
-
-    <hr/>
-    <h4 style="margin-left: 105px;"><i class="fa fa-download"></i> Export</h4>
-    <div class="form-row">
-        <label for="wsl-config-export-file"><i class="fa fa-file-archive-o"></i> To file</label>
-        <input type="text" id="wsl-config-export-file" placeholder="e.g. C:\backup\ubuntu.tar">
-    </div>
-    <div class="form-row">
-        <button type="button" id="wsl-config-export-btn" class="red-ui-button" style="margin-left: 105px;">
-            <i class="fa fa-download"></i> Export
-        </button>
-        <div class="form-tips">Exports the environment selected above to a .tar file: <code>wsl --export</code>. The result can be used as the <b>Image file</b> of another config node.</div>
-    </div>
 </script>
 
 <script type="text/html" data-help-name="wsl-config">
@@ -293,7 +248,7 @@
         <li><b>Use existing environment</b> &ndash; pick one of the environments already installed on this PC from the dropdown. The list is read with <code>wsl -l -v</code> and can be reloaded with the refresh button. The environment is only used; it is never modified or removed by deploying.</li>
         <li><b>Create new environment (import image file)</b> &ndash; create a new environment from a <code>.tar</code> / <code>.tar.gz</code> image stored on this PC (<code>wsl --import</code>). The name must not be one that already exists; the editor rejects a duplicate name.</li>
     </ul>
-    <p>No image is ever downloaded from the internet. To create a clean environment, obtain an image yourself (for example an Ubuntu WSL rootfs, or an <b>Export</b> of an environment you already have) and point <b>Image file</b> at it.</p>
+    <p>No image is ever downloaded from the internet. To create a clean environment, obtain an image yourself (for example an Ubuntu WSL rootfs, or a <code>wsl --export</code> of an environment you already have) and point <b>Image file</b> at it.</p>
 
     <h3>Reusing an environment</h3>
     <p>Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and no import runs. Reinstalling this module, or importing the flow on a PC that already has the environment, therefore picks the existing environment back up rather than recreating it.</p>
@@ -308,7 +263,4 @@
     <h3>Deleting the config node</h3>
     <p>This node never removes a WSL environment. Deleting the config node only drops the reference to it, so the environment and everything in it stay on disk and can be picked up again by a new config node.</p>
     <p>To remove an environment, do it yourself from a terminal: <code>wsl --unregister &lt;name&gt;</code>, then delete its installation folder if you want the disk space back.</p>
-
-    <h3>Export</h3>
-    <p>Exports the selected environment to a <code>.tar</code> image file by running <code>wsl --export &lt;distro&gt; &lt;file&gt;</code>. Large environments may take several minutes. The exported file can be used as the <b>Image file</b> of another config node, for example to clone an environment or move it to another machine.</p>
 </script>
