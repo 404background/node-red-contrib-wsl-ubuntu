@@ -8,12 +8,16 @@ This node can execute commands in the WSL Ubuntu environment.
 ![flows.png](./image/flows.png)
 
 Therefore, **this node works only on Windows**.  
-Please install the distribution using the wsl command in advance.  
+Install the distribution with the `wsl` command in advance, or let the
+[configuration node](#configuration-node-using-multiple-environments) import one from a
+`.tar` / `.tar.gz` image.  
 
 The node can be set to the following options.  
-- Ubuntu version
-- Set the password when executing sudo (credential property)
-- Whether the execution results are output sequentially or not
+- The WSL environment to run in (WSL Config node)
+- The password used when executing sudo (credential property)
+- Whether the shell startup files are loaded (Shell Init)
+- A command to run before `msg.payload` (Pre CMD)
+- Whether the execution results are output sequentially or not (Continuous)
 
 ![edit.png](./image/edit.png)
 
@@ -144,6 +148,8 @@ When a config node is created, you choose a **Source**:
 - **Create new environment (import image file)** – create a new environment from a `.tar` / `.tar.gz` image stored on this PC (`wsl --import <new name> <install location> <file>`).
 
 ### Creating a new environment
+
+![config.png](./image/config.png)
 
 - **New name** – the name of the environment to create. It must not match an environment that already exists; the editor rejects a duplicate name and the node refuses to deploy until it is unique. Use letters, digits, dot, dash and underscore.
 - **Image file** – path to the `.tar` / `.tar.gz` image on this PC. The check button next to the field verifies that the path exists before you deploy.
