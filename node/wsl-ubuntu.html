@@ -47,6 +47,29 @@
     });
 </script>
 
+<style>
+    /* Inputs start after the 100px label, so field hints are indented to match
+       instead of sitting flush left like a .form-tips box would. */
+    .wsl-form-hint {
+        margin-left: 104px;
+        /* Pulls the hint up against its own field: inputs carry a 10px bottom
+           margin, and rows are only 12px apart. */
+        margin-top: -4px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--red-ui-secondary-text-color, #888);
+    }
+
+    .wsl-form-hint:empty {
+        display: none;
+    }
+
+    /* The editor sets code to the base 14px, which would outgrow the hint. */
+    .wsl-form-hint code {
+        font-size: inherit;
+    }
+</style>
+
 <script type="text/html" data-template-name="wsl-ubuntu">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -68,15 +91,15 @@
         <input
         type="checkbox"
         id="node-input-loadProfile"
-        style="display: inline-block; width: auto; vertical-align: top;"
+        style="display: inline-block; width: auto; vertical-align: top; margin-bottom: 10px;"
         />
-        <div class="form-tips">Loads <code>~/.bashrc</code> and <code>/etc/profile</code>, like an Ubuntu terminal.</div>
+        <div class="wsl-form-hint">Loads <code>~/.bashrc</code> and <code>/etc/profile</code>, like an Ubuntu terminal.</div>
     </div>
 
     <div class="form-row">
         <label for="node-input-initCmd"><i class="fa fa-terminal"></i> Pre CMD</label>
         <input type="text" id="node-input-initCmd" placeholder="e.g. source ~/catkin_ws/devel/setup.bash">
-        <div class="form-tips">Runs before <code>msg.payload</code>.</div>
+        <div class="wsl-form-hint">Runs before <code>msg.payload</code>.</div>
     </div>
 
     <div class="form-row">
@@ -84,9 +107,9 @@
         <input
         type="checkbox"
         id="node-input-continuous"
-        style="display: inline-block; width: auto; vertical-align: top;"
+        style="display: inline-block; width: auto; vertical-align: top; margin-bottom: 10px;"
         />
-        <div class="form-tips">Streams output as it arrives and shows a stop button. For long-running processes (e.g. roscore).</div>
+        <div class="wsl-form-hint">Streams output as it arrives and shows a stop button. For long-running processes (e.g. roscore).</div>
     </div>
 </script>
 
