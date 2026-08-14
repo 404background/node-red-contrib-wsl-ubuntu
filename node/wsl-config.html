@@ -1,0 +1,278 @@
+<script type="text/javascript">
+    (function () {
+        // Names of the distributions installed on this PC, refreshed every time
+        // an edit dialog is opened. validate() needs them synchronously, so they
+        // are cached here rather than fetched on demand.
+        var wslKnownDistros = [];
+
+        // While the edit dialog is open the node still holds its saved
+        // sourceType, so the value selected in the dialog is the current one.
+        function editingSourceType(node) {
+            var el = $("#node-config-input-sourceType");
+            if (el.length === 1) {
+                return el.val();
+            }
+            return node.sourceType || "existing";
+        }
+
+        function isValidDistroName(name) {
+            return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+        }
+
+        RED.nodes.registerType('wsl-config', {
+            category: 'config',
+            defaults: {
+                name: { value: "" },
+                distro: {
+                    value: "",
+                    required: true,
+                    validate: function (v) {
+                        var name = (v || "").trim();
+                        if (!name) return false;
+                        if (editingSourceType(this) !== "import") return true;
+                        if (!isValidDistroName(name)) return false;
+                        // The name this node already uses stays valid: once the
+                        // import has run, the distribution does exist.
+                        if (name === (this.distro || "").trim()) return true;
+                        return wslKnownDistros.indexOf(name) === -1;
+                    }
+                },
+                sourceType: { value: "existing" },
+                sourceFile: { value: "" },
+                installLocation: { value: "" }
+            },
+            label: function () {
+                return this.name || this.distro || "wsl-config";
+            },
+            oneditprepare: function () {
+                var node = this;
+                var savedDistro = (node.distro || "").trim();
+
+                // The stored value lives in a hidden input; the visible controls
+                // (dropdown for existing, text field for a new import) write to it.
+                $("#node-config-input-sourceType").val(node.sourceType || "existing");
+                $("#wsl-distro-new").val(savedDistro);
+
+                function syncDistro() {
+                    var value = $("#node-config-input-sourceType").val() === "import"
+                        ? $("#wsl-distro-new").val().trim()
+                        : ($("#wsl-distro-select").val() || "");
+                    $("#node-config-input-distro").val(value);
+                    RED.nodes.dirty(true);
+                }
+
+                // Warn about a name that is already taken as soon as it is typed.
+                function updateNameFeedback() {
+                    var hint = $("#wsl-distro-new-hint");
+                    var name = $("#wsl-distro-new").val().trim();
+                    if (!name) {
+                        hint.text("").removeClass("wsl-hint-error");
+                        return;
+                    }
+                    if (!isValidDistroName(name)) {
+                        hint.text("Use letters, digits, dot, dash and underscore only.").addClass("wsl-hint-error");
+                        return;
+                    }
+                    if (name !== savedDistro && wslKnownDistros.indexOf(name) !== -1) {
+                        hint.text('"' + name + '" already exists. Choose a name that is not in use, '
+                            + 'or switch to "Use existing environment".').addClass("wsl-hint-error");
+                        return;
+                    }
+                    hint.text("").removeClass("wsl-hint-error");
+                }
+
+                function loadDistros(done) {
+                    $.getJSON("wsl-config/distros", function (distros) {
+                        wslKnownDistros = distros.map(function (d) { return d.name; });
+
+                        var select = $("#wsl-distro-select");
+                        var selected = $("#node-config-input-distro").val() || savedDistro;
+                        select.empty();
+
+                        if (distros.length === 0) {
+                            select.append($("<option>").val("").text("-- no WSL distribution found --"));
+                        } else {
+                            select.append($("<option>").val("").text("-- select an environment --"));
+                        }
+
+                        distros.forEach(function (d) {
+                            select.append($("<option>").val(d.name)
+                                .text(d.name + "  (WSL" + d.version + ", " + d.state + ")"));
+                        });
+
+                        // Keep a configured environment selectable even when it is
+                        // gone, so a missing one is visible instead of silently reset.
+                        if (selected && wslKnownDistros.indexOf(selected) === -1) {
+                            select.append($("<option>").val(selected)
+                                .text(selected + "  (not installed)"));
+                        }
+
+                        select.val(selected || "");
+                        updateNameFeedback();
+                        if (done) done();
+                    }).fail(function () {
+                        $("#wsl-distro-select").empty()
+                            .append($("<option>").val("").text("-- could not read the distribution list --"));
+                        if (done) done();
+                    });
+                }
+                loadDistros(syncDistro);
+
+                // Show only the inputs relevant to the chosen source.
+                function updateVisibility() {
+                    var type = $("#node-config-input-sourceType").val();
+                    $(".wsl-src-existing").toggle(type === "existing");
+                    $(".wsl-src-import").toggle(type === "import");
+                }
+
+                $("#node-config-input-sourceType").on("change", function () {
+                    updateVisibility();
+                    syncDistro();
+                });
+                $("#wsl-distro-select").on("change", syncDistro);
+                $("#wsl-distro-new").on("input", function () {
+                    updateNameFeedback();
+                    syncDistro();
+                });
+                $("#wsl-distro-refresh-btn").on("click", function () {
+                    loadDistros();
+                });
+                updateVisibility();
+
+                // --- Image file check ---------------------------------------
+                $("#wsl-image-check-btn").on("click", function () {
+                    var file = $("#node-config-input-sourceFile").val();
+                    if (!file) {
+                        RED.notify("Image file path is not specified.", "error");
+                        return;
+                    }
+                    $.getJSON("wsl-config/check-image", { path: file }, function (data) {
+                        if (data.exists) {
+                            var mb = (data.size / (1024 * 1024)).toFixed(1);
+                            RED.notify("Image file found (" + mb + " MB).", "success");
+                        } else {
+                            RED.notify("Image file not found: " + (data.error || "unknown error"), "error");
+                        }
+                    }).fail(function () {
+                        RED.notify("Could not check the image file.", "error");
+                    });
+                });
+            },
+            oneditsave: function () {
+                // Guard against the hidden input being read before the last
+                // change event landed.
+                this.distro = ($("#node-config-input-sourceType").val() === "import"
+                    ? $("#wsl-distro-new").val().trim()
+                    : ($("#wsl-distro-select").val() || ""));
+                $("#node-config-input-distro").val(this.distro);
+            }
+        });
+    })();
+</script>
+
+<style>
+    /* Inputs start after the 100px label, so field hints are indented to match
+       instead of sitting flush left like a .form-tips box would. */
+    .wsl-form-hint {
+        margin-left: 104px;
+        /* Pulls the hint up against its own field: inputs carry a 10px bottom
+           margin, and rows are only 12px apart. */
+        margin-top: -4px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--red-ui-secondary-text-color, #888);
+    }
+
+    .wsl-form-hint:empty {
+        display: none;
+    }
+
+    /* The editor sets code to the base 14px, which would outgrow the hint. */
+    .wsl-form-hint code {
+        font-size: inherit;
+    }
+
+    .wsl-hint-error {
+        color: var(--red-ui-text-color-error, #a94442);
+    }
+</style>
+
+<script type="text/html" data-template-name="wsl-config">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Config name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-config-input-sourceType"><i class="fa fa-cubes"></i> Source</label>
+        <select id="node-config-input-sourceType" style="width:70%;">
+            <option value="existing">Use existing environment</option>
+            <option value="import">Create new environment (import image file)</option>
+        </select>
+    </div>
+
+    <!-- The stored distribution name; the controls below write into it. -->
+    <input type="hidden" id="node-config-input-distro">
+
+    <div class="form-row wsl-src-existing">
+        <label for="wsl-distro-select"><i class="fa fa-linux"></i> Environment</label>
+        <select id="wsl-distro-select" style="width:60%;"></select>
+        <button type="button" id="wsl-distro-refresh-btn" class="red-ui-button" title="Reload the list">
+            <i class="fa fa-refresh"></i>
+        </button>
+        <div class="wsl-form-hint">Environments already installed on this PC. Selecting one only uses it.</div>
+    </div>
+
+    <div class="form-row wsl-src-import">
+        <label for="wsl-distro-new"><i class="fa fa-linux"></i> New name</label>
+        <input type="text" id="wsl-distro-new" placeholder="e.g. Ubuntu2204_MyProject">
+        <div class="wsl-form-hint">Must not match an environment that already exists.</div>
+        <div class="wsl-form-hint" id="wsl-distro-new-hint"></div>
+    </div>
+
+    <div class="form-row wsl-src-import">
+        <label for="node-config-input-sourceFile"><i class="fa fa-file-archive-o"></i> Image file</label>
+        <input type="text" id="node-config-input-sourceFile" style="width:60%;" placeholder="e.g. C:\wsl\images\ubuntu-22.04.tar.gz">
+        <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
+            <i class="fa fa-check"></i>
+        </button>
+        <div class="wsl-form-hint"><code>.tar</code> / <code>.tar.gz</code> image stored on this PC.</div>
+    </div>
+
+    <div class="form-row wsl-src-import">
+        <label for="node-config-input-installLocation"><i class="fa fa-folder-open"></i> Install to</label>
+        <input type="text" id="node-config-input-installLocation" placeholder="e.g. C:\wsl\Ubuntu2204_MyProject (optional)">
+        <div class="wsl-form-hint">Where the virtual disk is created. Default: <code>&lt;home&gt;\wsl\&lt;name&gt;</code>.</div>
+    </div>
+
+    <div class="form-row wsl-src-import">
+        <div class="form-tips">
+            <i class="fa fa-info-circle"></i> Imported on <b>deploy</b>, only if the name does not exist yet.
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="wsl-config">
+    <p>Configuration node that selects the WSL (Windows Subsystem for Linux) environment a <code>wsl-ubuntu</code> node runs in, and creates one by importing an image if it does not exist yet. One config node per environment lets several Ubuntu environments be used side by side.</p>
+
+    <h3>Source</h3>
+    <p>Choose how the environment is obtained:</p>
+    <ul>
+        <li><b>Use existing environment</b> &ndash; pick one of the environments already installed on this PC from the dropdown. The list is read with <code>wsl -l -v</code> and can be reloaded with the refresh button. The environment is only used; it is never modified or removed by deploying.</li>
+        <li><b>Create new environment (import image file)</b> &ndash; create a new environment from a <code>.tar</code> / <code>.tar.gz</code> image stored on this PC (<code>wsl --import</code>). The name must not be one that already exists; the editor rejects a duplicate name.</li>
+    </ul>
+
+    <h3>Reusing an environment</h3>
+    <p>Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and no import runs. Reinstalling this module, or importing the flow on a PC that already has the environment, therefore picks the existing environment back up rather than recreating it.</p>
+
+    <h3>Importing</h3>
+    <p>The import runs automatically when the flow is <b>deployed</b> and no environment with that name exists yet. While it runs, <code>wsl-ubuntu</code> nodes using this config show <b>Importing...</b> as their node status and reject commands until the environment is ready.</p>
+    <ul>
+        <li><b>Image file</b> &ndash; the <code>.tar</code> / <code>.tar.gz</code> image on this PC to import. The check button verifies that the path exists.</li>
+        <li><b>Install to</b> &ndash; where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;name&gt;</code>.</li>
+    </ul>
+
+    <h3>Deleting the config node</h3>
+    <p>This node never removes a WSL environment. Deleting the config node only drops the reference to it, so the environment and everything in it stay on disk and can be picked up again by a new config node.</p>
+    <p>To remove an environment, do it yourself from a terminal: <code>wsl --unregister &lt;name&gt;</code>, then delete its installation folder if you want the disk space back.</p>
+</script>

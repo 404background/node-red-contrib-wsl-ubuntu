@@ -1,37 +1,112 @@
 const { spawn, exec } = require("child_process");
 
 module.exports = function (RED) {
+    RED.httpAdmin.post("/wsl-ubuntu/:id/kill", function(req, res) {
+        const targetNode = RED.nodes.getNode(req.params.id);
+        if (targetNode) {
+            try {
+                targetNode.killProcess();
+                res.sendStatus(200);
+            } catch (e) {
+                res.status(500).send(`Error: ${e.message}`);
+            }
+        } else {
+            res.sendStatus(404);
+        }
+    });
+
     function WslUbuntuNode(config) {
         RED.nodes.createNode(this, config);
         const node = this;
 
-        const distro = config.distro || "Ubuntu-20.04";
+        let distro = "Ubuntu-20.04";
+        let wslConfigNode = null;
+        if (config.wslconfig) {
+            wslConfigNode = RED.nodes.getNode(config.wslconfig);
+            if (wslConfigNode && wslConfigNode.distro) {
+                distro = wslConfigNode.distro;
+            }
+        } else if (config.distro) {
+            distro = config.distro;
+        }
         const continuous = config.continuous || false;
         const sudoPassword = this.credentials.sudoPassword || "";
         const initCmd = config.initCmd || "";
-        
+        // Ubuntu's ~/.bashrc returns immediately when the shell is not interactive,
+        // so a plain "bash -l -c" starts with an environment a real terminal never
+        // has (no ROS setup.bash, no aliases or PATH additions from ~/.bashrc).
+        // A login *interactive* shell reproduces what opening a WSL terminal does.
+        const loadProfile = config.loadProfile !== false;
+        // MOTD_SHOWN stops /etc/profile.d/update-motd.sh from printing the daily
+        // "Welcome to Ubuntu" banner into the command output; +H disables history
+        // expansion, which an interactive shell would otherwise apply to "!" in commands.
+        const loginShell = loadProfile
+            ? "env MOTD_SHOWN=1 bash +H -l -i -c"
+            : "bash -l -c";
+
+        // An interactive shell without a tty writes these to stderr; they are not
+        // command output and must not be reported as errors.
+        const shellNoise = [
+            /^logout$/,
+            /^bash: cannot set terminal process group \(-?\d+\): .*$/,
+            /^bash: no job control in this shell$/
+        ];
+
+        function stripShellNoise(text) {
+            if (!loadProfile) return text;
+            return text
+                .split("\n")
+                .filter(line => !shellNoise.some(re => re.test(line.replace(/\r$/, ""))))
+                .join("\n");
+        }
+
+        // Single-quote the command for the shell, so that $VAR, backticks and
+        // quotes are expanded by the shell that has the profile loaded rather
+        // than by the outer wrapper shell, which knows nothing of ~/.bashrc.
+        function shQuote(str) {
+            return "'" + str.split("'").join("'\\''") + "'";
+        }
+
         let activeProcess = null;
         let currentCommand = "";
         let isKilling = false;
         let processHasOutput = false;
         let processGroupId = null;
-        
-        node.status({ fill: "green", shape: "dot", text: "Standby" });
 
-        RED.httpAdmin.post("/wsl-ubuntu/:id/kill", function(req, res) {
-            const node = RED.nodes.getNode(req.params.id);
-            if (node) {
-                try {
-                    node.killProcess();
-                    res.sendStatus(200);
-                } catch (e) {
-                    res.status(500).send(`Error: ${e.message}`);
-                }
-            } else {
-                res.sendStatus(404);
+        function showProvisionStatus(status) {
+            switch (status) {
+                case "checking":
+                    node.status({ fill: "grey", shape: "ring", text: "Checking WSL..." });
+                    break;
+                case "starting":
+                    node.status({ fill: "blue", shape: "ring", text: "Preparing environment..." });
+                    break;
+                case "importing":
+                    node.status({ fill: "blue", shape: "ring", text: "Importing..." });
+                    break;
+                case "error":
+                    node.status({ fill: "red", shape: "dot", text: "WSL setup failed" });
+                    break;
+                default:
+                    node.status({ fill: "green", shape: "dot", text: "Standby" });
             }
-        });
-        
+        }
+
+        if (wslConfigNode && wslConfigNode.provisionStatus) {
+            showProvisionStatus(wslConfigNode.provisionStatus);
+            const onProvision = function (evt) {
+                if (!activeProcess && !isKilling) {
+                    showProvisionStatus(evt.status);
+                }
+            };
+            wslConfigNode.on("wsl-provision", onProvision);
+            node.on("close", function () {
+                wslConfigNode.removeListener("wsl-provision", onProvision);
+            });
+        } else {
+            node.status({ fill: "green", shape: "dot", text: "Standby" });
+        }
+
         function findWSLProcesses(callback) {
             if (!currentCommand) return callback([]);
             
@@ -202,6 +277,12 @@ module.exports = function (RED) {
                 return;
             }
 
+            if (wslConfigNode && wslConfigNode.provisionStatus && wslConfigNode.provisionStatus !== "ready") {
+                node.error('WSL environment "' + distro + '" is not ready (' + wslConfigNode.provisionStatus
+                    + (wslConfigNode.provisionDetail ? ": " + wslConfigNode.provisionDetail : "") + ")", msg);
+                return;
+            }
+
             if (activeProcess || isKilling) {
                 node.error("Process is already running or being terminated. Send msg.kill=true to terminate the current process.", msg);
                 return;
@@ -218,10 +299,13 @@ module.exports = function (RED) {
             
             const initCmdStr = initCmd ? `${initCmd} && ` : "";
             
-            if (command.startsWith("sudo") && sudoPassword) {
-                runCommand = `echo ${sudoPassword} | sudo -S bash -l -c "${initCmdStr}${command.slice(5).replace(/"/g, '\\"')}"`;
+            const isSudo = command.startsWith("sudo") && sudoPassword.length > 0;
+            const innerCommand = initCmdStr + (isSudo ? command.slice(5) : command);
+
+            if (isSudo) {
+                runCommand = `echo ${shQuote(sudoPassword)} | sudo -S ${loginShell} ${shQuote(innerCommand)}`;
             } else {
-                runCommand = `bash -l -c "${initCmdStr}${command.replace(/"/g, '\\"')}"`;
+                runCommand = `${loginShell} ${shQuote(innerCommand)}`;
             }
 
             let outputBuffer = "";
@@ -269,7 +353,8 @@ module.exports = function (RED) {
             });
 
             child.stderr.on("data", (data) => {
-                const message = data.toString();
+                const message = stripShellNoise(data.toString());
+                if (!message.trim()) return;
                 processHasOutput = true;
                 
                 if (continuous) {
@@ -325,28 +410,34 @@ module.exports = function (RED) {
 
         node.on("close", function (done) {
             if (activeProcess) {
-                node.status({ fill: "grey", shape: "dot", text: "Deploying..." });
-                
-                node.killProcess(() => {
-                    exec(`wsl.exe -d ${distro} -e bash -c "pgrep -f '${currentCommand.replace(/'/g, "\\'")}' | xargs -r kill -9"`, 
-                        { windowsHide: true, timeout: 2000 }, 
-                        () => done()
-                    );
-                });
-                
-                const safetyTimeout = setTimeout(() => {
-                    if (activeProcess) {
-                        activeProcess = null;
-                        done();
-                    }
-                }, 5000);
-                
-                safetyTimeout._onTimeout = function() {
+                let closeDone = false;
+                const finishClose = function () {
+                    if (closeDone) return;
+                    closeDone = true;
                     clearTimeout(safetyTimeout);
-                    if (activeProcess) {
-                        done();
-                    }
+                    done();
                 };
+
+                node.status({ fill: "grey", shape: "dot", text: "Deploying..." });
+
+                const savedCommand = currentCommand;
+
+                node.killProcess(() => {
+                    if (savedCommand) {
+                        const escapedCmd = savedCommand.replace(/'/g, "\\'");
+                        exec(`wsl.exe -d ${distro} -e bash -c "pgrep -f '${escapedCmd}' | xargs -r kill -9"`,
+                            { windowsHide: true, timeout: 2000 },
+                            () => finishClose()
+                        );
+                    } else {
+                        finishClose();
+                    }
+                });
+
+                const safetyTimeout = setTimeout(() => {
+                    activeProcess = null;
+                    finishClose();
+                }, 5000);
             } else {
                 done();
             }

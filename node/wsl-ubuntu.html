@@ -4,9 +4,10 @@
         color: '#dd4814',
         defaults: {
             name: { value: "" },
-            distro: { value: "Ubuntu-20.04", required: true },
+            wslconfig: { value: "", type: "wsl-config" },
             continuous: { value: false },
-            initCmd: { value: "" }
+            initCmd: { value: "" },
+            loadProfile: { value: true }
         },
         credentials: {
             sudoPassword: { type: "password" }
@@ -18,21 +19,8 @@
             return this.name || "wsl-ubuntu";
         },
         oneditprepare: function () {
-            const distroSelect = $("#node-input-distro");
-            const currentValue = this.distro || "Ubuntu-20.04";
-
-            distroSelect.empty();
-            const versions = ["Ubuntu-18.04", "Ubuntu-20.04", "Ubuntu-22.04", "Ubuntu-24.04"];
-            versions.forEach(distro => {
-                const selected = distro === currentValue ? "selected" : "";
-                distroSelect.append(`<option value="${distro}" ${selected}>${distro}</option>`);
-            });
-
             $("#node-input-continuous").prop("checked", this.continuous);
-        },
-        oneditsave: function () {
-            const passwordField = $("#node-input-sudoPassword");
-            this.distro = $("#node-input-distro").val();
+            $("#node-input-loadProfile").prop("checked", this.loadProfile !== false);
         },
         button: {
             visible: function() {
@@ -59,6 +47,29 @@
     });
 </script>
 
+<style>
+    /* Inputs start after the 100px label, so field hints are indented to match
+       instead of sitting flush left like a .form-tips box would. */
+    .wsl-form-hint {
+        margin-left: 104px;
+        /* Pulls the hint up against its own field: inputs carry a 10px bottom
+           margin, and rows are only 12px apart. */
+        margin-top: -4px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--red-ui-secondary-text-color, #888);
+    }
+
+    .wsl-form-hint:empty {
+        display: none;
+    }
+
+    /* The editor sets code to the base 14px, which would outgrow the hint. */
+    .wsl-form-hint code {
+        font-size: inherit;
+    }
+</style>
+
 <script type="text/html" data-template-name="wsl-ubuntu">
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -66,8 +77,8 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-distro"><i class="fa fa-linux"></i> Version</label>
-        <select id="node-input-distro"></select>
+        <label for="node-input-wslconfig"><i class="fa fa-linux"></i> WSL Config</label>
+        <input type="text" id="node-input-wslconfig">
     </div>
 
     <div class="form-row">
@@ -76,9 +87,19 @@
     </div>
 
     <div class="form-row">
+        <label for="node-input-loadProfile"><i class="fa fa-file-text-o"></i> Shell Init</label>
+        <input
+        type="checkbox"
+        id="node-input-loadProfile"
+        style="display: inline-block; width: auto; vertical-align: top; margin-bottom: 10px;"
+        />
+        <div class="wsl-form-hint">Loads <code>~/.bashrc</code> and <code>/etc/profile</code>, like an Ubuntu terminal.</div>
+    </div>
+
+    <div class="form-row">
         <label for="node-input-initCmd"><i class="fa fa-terminal"></i> Pre CMD</label>
-        <input type="text" id="node-input-initCmd" placeholder="Commands to run before msg.payload (e.g. source ~/catkin_ws/devel/setup.bash)">
-        <div class="form-tips">Command to run before executing msg.payload.</div>
+        <input type="text" id="node-input-initCmd" placeholder="e.g. source ~/catkin_ws/devel/setup.bash">
+        <div class="wsl-form-hint">Runs before <code>msg.payload</code>.</div>
     </div>
 
     <div class="form-row">
@@ -86,14 +107,19 @@
         <input
         type="checkbox"
         id="node-input-continuous"
-        style="display: inline-block; width: auto; vertical-align: top;"
+        style="display: inline-block; width: auto; vertical-align: top; margin-bottom: 10px;"
         />
-        <div class="form-tips"><b>Note:</b> Enable this option for long-running processes (e.g. roscore). Output will be sent continuously, and a stop button will appear to terminate the process.</div>
+        <div class="wsl-form-hint">Streams output as it arrives and shows a stop button. For long-running processes (e.g. roscore).</div>
     </div>
 </script>
 
 <script type="text/html" data-help-name="wsl-ubuntu">
     <p>A node for executing commands in WSL (Windows Subsystem for Linux) Ubuntu environment.</p>
+    <h3>Properties</h3>
+    <dl class="message-properties">
+        <dt>WSL Config <span class="property-type">wsl-config</span></dt>
+        <dd>Configuration node that specifies which WSL distribution to use. Supports custom distros created via <code>wsl --import</code>.</dd>
+    </dl>
     <h3>Inputs</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">string</span></dt>
@@ -110,4 +136,5 @@
     <p>When "Continuous" mode is enabled, command output is sent continuously as it becomes available. New commands are rejected while a process is running, and a stop button appears to terminate the process.</p>
     <p>When "Continuous" mode is disabled, command output is sent as a single message after the command completes execution.</p>
     <p>The "Pre CMD" field allows you to specify commands that will be executed before the main command (msg.payload). This is useful for setting up environments or sourcing configuration files.</p>
+    <p>"Shell Init" is enabled by default. The command then runs in a login <b>interactive</b> shell (<code>bash -l -i -c</code>), so <code>/etc/profile</code> and <code>~/.bashrc</code> are sourced exactly as they are when you open an Ubuntu terminal. Ubuntu's <code>~/.bashrc</code> exits early for non-interactive shells, so without this anything appended to it (for example <code>source /opt/ros/humble/setup.bash</code>) would be skipped. The login banner (MOTD) is suppressed so it does not appear in the output.</p>
 </script>
