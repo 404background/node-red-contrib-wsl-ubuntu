@@ -5,14 +5,6 @@
         // are cached here rather than fetched on demand.
         var wslKnownDistros = [];
 
-        // "file" and "download" are the pre-0.0.5 names of the "import" source.
-        function normalizeSourceType(sourceType) {
-            if (sourceType === "import" || sourceType === "file" || sourceType === "download") {
-                return "import";
-            }
-            return "existing";
-        }
-
         // While the edit dialog is open the node still holds its saved
         // sourceType, so the value selected in the dialog is the current one.
         function editingSourceType(node) {
@@ -20,7 +12,7 @@
             if (el.length === 1) {
                 return el.val();
             }
-            return normalizeSourceType(node.sourceType);
+            return node.sourceType || "existing";
         }
 
         function isValidDistroName(name) {
@@ -58,7 +50,7 @@
 
                 // The stored value lives in a hidden input; the visible controls
                 // (dropdown for existing, text field for a new import) write to it.
-                $("#node-config-input-sourceType").val(normalizeSourceType(node.sourceType));
+                $("#node-config-input-sourceType").val(node.sourceType || "existing");
                 $("#wsl-distro-new").val(savedDistro);
 
                 function syncDistro() {
@@ -223,7 +215,7 @@
         <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
             <i class="fa fa-check"></i>
         </button>
-        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>. Nothing is downloaded from the internet; the image has to be one you obtained yourself.</div>
+        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>.</div>
     </div>
 
     <div class="form-row wsl-src-import">
@@ -248,7 +240,6 @@
         <li><b>Use existing environment</b> &ndash; pick one of the environments already installed on this PC from the dropdown. The list is read with <code>wsl -l -v</code> and can be reloaded with the refresh button. The environment is only used; it is never modified or removed by deploying.</li>
         <li><b>Create new environment (import image file)</b> &ndash; create a new environment from a <code>.tar</code> / <code>.tar.gz</code> image stored on this PC (<code>wsl --import</code>). The name must not be one that already exists; the editor rejects a duplicate name.</li>
     </ul>
-    <p>No image is ever downloaded from the internet. Obtain an image yourself and point <b>Image file</b> at it.</p>
 
     <h3>Reusing an environment</h3>
     <p>Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and no import runs. Reinstalling this module, or importing the flow on a PC that already has the environment, therefore picks the existing environment back up rather than recreating it.</p>

@@ -13,16 +13,6 @@ const inflightProvisions = {};
 const VALID_DISTRO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 module.exports = function (RED) {
-    // "file" and "download" are the pre-0.0.5 names for what is now a single
-    // "import" source. Old flows keep working; "download" no longer fetches
-    // anything from the internet and needs a local image file instead.
-    function normalizeSourceType(sourceType) {
-        if (sourceType === "import" || sourceType === "file" || sourceType === "download") {
-            return "import";
-        }
-        return "existing";
-    }
-
     // wsl.exe emits UTF-16LE with a BOM and trailing NULs; normalise to a plain string.
     function decodeWslOutput(buf) {
         if (!buf || buf.length === 0) return "";
@@ -80,15 +70,11 @@ module.exports = function (RED) {
         RED.nodes.createNode(this, config);
         const node = this;
         node.distro = (config.distro || "").trim();
-        node.sourceType = normalizeSourceType(config.sourceType);
+        node.sourceType = config.sourceType === "import" ? "import" : "existing";
         node.sourceFile = config.sourceFile;
         node.installLocation = config.installLocation;
         node.provisionStatus = "checking";
         node.provisionDetail = "";
-
-        // Flows saved before automatic downloads were removed have no image
-        // file to import from, so they need a message that says what to do.
-        const wasDownloadSource = config.sourceType === "download";
 
         function handleProvisionEvent(phase, detail) {
             node.provisionStatus = phase;
@@ -121,10 +107,6 @@ module.exports = function (RED) {
 
         function provision(report) {
             if (!node.sourceFile) {
-                if (wasDownloadSource) {
-                    return report("error", "Automatic image download has been removed. Set the image file to a "
-                        + ".tar/.tar.gz image already stored on this PC.");
-                }
                 return report("error", "Image file is not set");
             }
             if (!fs.existsSync(node.sourceFile)) {

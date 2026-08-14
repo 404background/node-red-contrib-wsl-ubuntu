@@ -143,8 +143,6 @@ When a config node is created, you choose a **Source**:
 - **Use existing environment** – pick one of the environments already installed on this PC from a dropdown. The list is read with `wsl -l -v` and can be reloaded with the refresh button. The environment is only used; deploying never modifies or removes it.
 - **Create new environment (import image file)** – create a new environment from a `.tar` / `.tar.gz` image stored on this PC (`wsl --import <new name> <install location> <file>`).
 
-**No image is ever downloaded from the internet.** Obtain an image yourself and point **Image file** at its path.
-
 ### Creating a new environment
 
 - **New name** – the name of the environment to create. It must not match an environment that already exists; the editor rejects a duplicate name and the node refuses to deploy until it is unique. Use letters, digits, dot, dash and underscore.
@@ -157,7 +155,7 @@ The import runs when the flow is **deployed**, and only if no environment with t
 
 Before importing anything, the configured name is looked up among the installed environments. If it already exists, that environment is used as it is and **no import runs**.
 
-This means that reinstalling this module, or importing the flow on a PC that already holds the environment, picks the existing environment back up instead of recreating it — the data inside it is preserved. The same applies to config nodes saved with the older "import from local image file" or "download" sources.
+This means that reinstalling this module, or importing the flow on a PC that already holds the environment, picks the existing environment back up instead of recreating it — the data inside it is preserved.
 
 ### Removing an environment
 
