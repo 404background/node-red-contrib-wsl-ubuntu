@@ -70,13 +70,13 @@
         id="node-input-loadProfile"
         style="display: inline-block; width: auto; vertical-align: top;"
         />
-        <div class="form-tips">Run the command in a login <b>interactive</b> shell so <code>~/.bashrc</code> and <code>/etc/profile</code> are loaded, just like opening an Ubuntu terminal. Disable this only if your <code>~/.bashrc</code> misbehaves when run non-interactively.</div>
+        <div class="form-tips">Loads <code>~/.bashrc</code> and <code>/etc/profile</code>, like an Ubuntu terminal.</div>
     </div>
 
     <div class="form-row">
         <label for="node-input-initCmd"><i class="fa fa-terminal"></i> Pre CMD</label>
-        <input type="text" id="node-input-initCmd" placeholder="Commands to run before msg.payload (e.g. source ~/catkin_ws/devel/setup.bash)">
-        <div class="form-tips">Command to run before executing msg.payload.</div>
+        <input type="text" id="node-input-initCmd" placeholder="e.g. source ~/catkin_ws/devel/setup.bash">
+        <div class="form-tips">Runs before <code>msg.payload</code>.</div>
     </div>
 
     <div class="form-row">
@@ -86,7 +86,7 @@
         id="node-input-continuous"
         style="display: inline-block; width: auto; vertical-align: top;"
         />
-        <div class="form-tips"><b>Note:</b> Enable this option for long-running processes (e.g. roscore). Output will be sent continuously, and a stop button will appear to terminate the process.</div>
+        <div class="form-tips">Streams output as it arrives and shows a stop button. For long-running processes (e.g. roscore).</div>
     </div>
 </script>
 

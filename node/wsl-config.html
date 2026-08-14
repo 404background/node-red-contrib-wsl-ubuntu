@@ -199,14 +199,14 @@
         <button type="button" id="wsl-distro-refresh-btn" class="red-ui-button" title="Reload the list">
             <i class="fa fa-refresh"></i>
         </button>
-        <div class="form-tips">WSL environments already installed on this PC, detected with <code>wsl -l -v</code>. Selecting one here only uses it &ndash; nothing is created or overwritten.</div>
+        <div class="form-tips">Environments already installed on this PC. Selecting one only uses it.</div>
     </div>
 
     <div class="form-row wsl-src-import">
         <label for="wsl-distro-new"><i class="fa fa-linux"></i> New name</label>
         <input type="text" id="wsl-distro-new" placeholder="e.g. Ubuntu2204_MyProject">
         <div class="form-tips" id="wsl-distro-new-hint"></div>
-        <div class="form-tips">Name for the environment to create. It must not match an environment that already exists.</div>
+        <div class="form-tips">Must not match an environment that already exists.</div>
     </div>
 
     <div class="form-row wsl-src-import">
@@ -215,18 +215,18 @@
         <button type="button" id="wsl-image-check-btn" class="red-ui-button" title="Check that the file exists">
             <i class="fa fa-check"></i>
         </button>
-        <div class="form-tips">Path to a <code>.tar</code> / <code>.tar.gz</code> image <b>already stored on this PC</b>.</div>
+        <div class="form-tips"><code>.tar</code> / <code>.tar.gz</code> image stored on this PC.</div>
     </div>
 
     <div class="form-row wsl-src-import">
         <label for="node-config-input-installLocation"><i class="fa fa-folder-open"></i> Install to</label>
         <input type="text" id="node-config-input-installLocation" placeholder="e.g. C:\wsl\Ubuntu2204_MyProject (optional)">
-        <div class="form-tips">Folder where the WSL environment (virtual disk) is created. Defaults to <code>&lt;home&gt;\wsl\&lt;name&gt;</code> if empty.</div>
+        <div class="form-tips">Where the virtual disk is created. Default: <code>&lt;home&gt;\wsl\&lt;name&gt;</code>.</div>
     </div>
 
     <div class="form-row wsl-src-import">
         <div class="form-tips" style="margin-left: 105px;">
-            <i class="fa fa-info-circle"></i> The image is imported when the flow is <b>deployed</b>, and only if no environment with that name exists yet. Progress ("Importing...") is shown as the status of <b>wsl-ubuntu</b> nodes using this config.
+            <i class="fa fa-info-circle"></i> Imported on <b>deploy</b>, only if the name does not exist yet.
         </div>
     </div>
 </script>
